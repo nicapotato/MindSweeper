@@ -1,0 +1,2170 @@
+body { 
+    font-family: "Press Start 2P", system-ui;
+    font-weight: 400;
+    font-style: normal;
+    background-color: #121212; 
+    color: #e0e0e0;
+}
+
+/* Main game layout - Mobile first (column by default) */
+.main-game-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    margin: 0 auto;
+    padding: 0 10px;
+    min-width: 885px; /* Game board (13*65) + borders + padding */
+    max-width: 100vw;
+    box-sizing: border-box;
+}
+
+/* Entities sidebar - Mobile first (full width by default) */
+.entities-sidebar {
+    background-color: #333;
+    border-top: 2px solid #555;
+    padding: 15px;
+    overflow-y: auto;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* New Map button when positioned in sidebar */
+.entities-sidebar .new-map-btn {
+    width: 100%;
+    padding: 12px 16px;
+    margin-bottom: 15px;
+    background-color: #222;
+    color: white;
+    border: 2px solid #fff;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: "Press Start 2P", system-ui;
+    font-weight: 400;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.entities-sidebar .new-map-btn:hover {
+    background-color: #fff;
+    color: #222;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.entities-sidebar .new-map-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-header {
+    margin-bottom: 15px;
+    border-bottom: 1px solid #555;
+    padding-bottom: 10px;
+}
+
+.sidebar-header h3 {
+    margin: 0 0 10px 0;
+    color: #fff;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.panel-tabs {
+    display: flex;
+    width: 100%;
+    gap: 2px;
+    margin-top: 8px;
+}
+
+.panel-tab {
+    flex: 1;
+    padding: 8px 4px;
+    background-color: #222;
+    border: 1px solid #fff;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 8px;
+    font-family: "Press Start 2P", system-ui;
+    font-weight: 400;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.panel-tab:hover {
+    background-color: #444;
+    border-color: #fff;
+}
+
+.panel-tab:focus {
+    outline: none;
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+.panel-tab.active {
+    background-color: #fff;
+    border-color: #fff;
+    color: #222;
+    font-weight: 400;
+}
+
+.panel-tab.active:hover {
+    background-color: #ddd;
+    border-color: #ddd;
+}
+
+.sidebar-panel {
+    display: none;
+}
+
+.sidebar-panel.active {
+    display: block;
+}
+
+.entities-content {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+}
+
+.achievements-content {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+}
+
+.howtoplay-content {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    color: #fff;
+    line-height: 1.6;
+}
+
+.howtoplay-content h4 {
+    color: #4CAF50;
+    margin: 20px 0 10px 0;
+    font-size: 16px;
+}
+
+.howtoplay-content h4:first-child {
+    margin-top: 0;
+}
+
+.howtoplay-content ul {
+    margin: 10px 0 20px 20px;
+    padding: 0;
+}
+
+.howtoplay-content li {
+    margin-bottom: 8px;
+    list-style-type: disc;
+}
+
+.howtoplay-content p {
+    margin: 10px 0;
+    color: #ccc;
+}
+
+.howtoplay-content strong {
+    color: #fff;
+    font-weight: bold;
+}
+
+/* Entity sections */
+.entity-section {
+    margin-bottom: 20px;
+}
+
+.entity-section:last-child {
+    margin-bottom: 0;
+}
+
+.entity-section-header {
+    font-weight: bold;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    padding: 5px 8px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.entity-section-header.hostile {
+    background-color: #4d1f1f;
+    color: #ff6666;
+    border-left: 3px solid #ff0000;
+}
+
+.entity-section-header.neutral {
+    background-color: #4d4d1f;
+    color: #ffcc66;
+    border-left: 3px solid #ffa500;
+}
+
+.entity-section-header.friendly {
+    background-color: #1f4d1f;
+    color: #66ff66;
+    border-left: 3px solid #00ff00;
+}
+
+/* Title bar with admin controls */
+.title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    position: relative;
+    padding: 0 10px;
+    flex-wrap: nowrap;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.title-bar h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    flex: 1;
+}
+
+.settings-controls {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    z-index: 1000; /* Ensure popover is above other elements */
+    flex-shrink: 0;
+}
+
+.settings-popover {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 10px;
+    background-color: #333;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 15px;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
+    display: none;
+    flex-direction: column;
+    min-width: 200px;
+}
+
+.user-settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.settings-separator {
+    height: 1px;
+    background-color: #555;
+    margin: 8px 0;
+}
+
+.admin-label {
+    font-size: 12px;
+    color: #888;
+    text-align: center;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.admin-mode-toggle {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #555;
+}
+
+.admin-mode-toggle .toggle-label {
+    font-size: 11px;
+    color: #999;
+}
+
+.settings-popover button {
+    margin: 5px 0;
+}
+
+.settings-popover .map-selector {
+    margin: 10px 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-popover .map-selector input {
+    margin-bottom: 5px;
+    width: 100%;
+}
+
+.settings-popover .map-selector button {
+    width: 100%;
+}
+
+/* Settings popover toggle container styling */
+.settings-popover .toggle-container {
+    display: flex;
+    align-items: center;
+    margin: 10px 0 0 0;
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+}
+
+.settings-popover .toggle-container input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+/* Theme selector styling */
+.theme-selector {
+    display: flex;
+    flex-direction: column;
+    margin: 10px 0;
+}
+
+.theme-selector label {
+    color: #e0e0e0;
+    font-size: 0.9rem;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.theme-selector select {
+    background-color: #444;
+    color: #e0e0e0;
+    border: 1px solid #666;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    width: 100%;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+}
+
+.theme-selector select:hover {
+    background-color: #555;
+    border-color: #777;
+}
+
+.theme-selector select:focus {
+    outline: none;
+    border-color: #55AAFF;
+    box-shadow: 0 0 0 2px rgba(85, 170, 255, 0.2);
+}
+
+.theme-selector option {
+    background-color: #444;
+    color: #e0e0e0;
+    padding: 8px;
+}
+
+#game-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: fit-content;
+    margin: 0 auto;
+    border: 2px solid #444;
+    border-radius: 4px;
+    overflow: hidden;
+    background-color: #222;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    flex-shrink: 0; /* Prevent game container from shrinking */
+}
+#game-board {
+    table-layout: fixed;
+    margin: 0;
+}
+#game-board td {
+    border: 1px solid #555;
+    width: 65px;
+    height: 65px;
+    min-width: 65px;
+    min-height: 65px;
+    max-width: 65px;
+    max-height: 65px;
+    text-align: center;
+    vertical-align: middle;
+    cursor: pointer;
+    background-color: #222; /* Darker background */
+    user-select: none; /* Prevent text selection */
+    padding: 0; /* Remove padding for canvas */
+    position: relative; /* For positioning canvas */
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    transition: background-color 0.2s; /* Smooth transition */
+    box-sizing: border-box;
+}
+#game-board canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-crisp-edges;
+    image-rendering: crisp-edges;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+}
+#game-board td.revealed {
+    background-color: #333; /* Revealed - darker theme */
+}
+#game-board td.enemy {
+    cursor: pointer; /* Can be clicked to kill */
+}
+#game-board td.treasure {
+    cursor: pointer; /* Can be clicked to claim */
+}
+#game-board td.dead {
+    cursor: default;
+}
+#game-board td.claimed {
+    cursor: default;
+}
+#game-board td.cleared {
+    cursor: default;
+}
+#game-board td.flagged {
+    cursor: pointer; /* Can be clicked to unflag */
+}
+#game-board td.dying {
+    background-color: #4d2626; /* Reddish background for dying state */
+    cursor: default;
+}
+#game-board td.dropped-item {
+    background-color: #4d4d15; /* Golden-yellow background for dropped items */
+    cursor: pointer; /* Can be clicked to collect */
+    animation: pulse 1.5s infinite; /* Add pulsing animation */
+}
+#game-board td.chest-dropped-item {
+    background-color: #3d4d2a; /* Green-gold background for chest drops */
+    cursor: pointer; /* Can be clicked to claim */
+    animation: pulse 1.5s infinite; /* Add pulsing animation */
+}
+#game-board td.indestructible {
+    background-color: #2a2a2a; /* Dark background for indestructible monoliths */
+    cursor: pointer; /* Can be clicked but shows warning */
+    border: 1px solid #666; /* Slightly lighter border to show it's different */
+}
+#game-board td.cleared[data-neighbor-monsters] {
+    color: #ff0000; /* Red text for monster count */
+}
+
+/* New styles for annotated tiles */
+#game-board td.has-annotation {
+    border: 1px solid #55AAFF; /* Highlight border for annotated tiles */
+}
+
+/* Annotation popover styles */
+.annotation-popover {
+    background-color: #333;
+    border: 1px solid #555;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    padding: 5px;
+    z-index: 1000;
+}
+
+.annotation-options {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+}
+
+.annotation-option {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #444;
+    border-radius: 3px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    color: #fff;
+    transition: background-color 0.2s;
+}
+
+.annotation-option:hover {
+    background-color: #555;
+}
+
+.annotation-option[data-value="*"] {
+    color: #FF5555; /* Red */
+}
+
+.annotation-option[data-value="flag"] {
+    color: #4CAF50; /* Green */
+}
+
+.annotation-clear {
+    grid-column: span 4;
+    width: auto;
+    font-size: 12px;
+    background-color: #3a3a3a;
+}
+
+#player-stats {
+    width: 100%;
+    border: 1px solid #555;
+    padding: 10px;
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+}
+
+.bars-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+    padding-left: 5px;
+    padding-right: 5px;
+    flex-grow: 1; /* Allow bars to expand to fill available space */
+}
+
+.bar-wrapper {
+    width: 100%;
+    position: relative;
+}
+
+.stat-label {
+    font-weight: bold;
+    font-size: 12px;
+    margin-bottom: 2px;
+    color: #aaa;
+}
+
+.stat-value {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+#player-name {
+    font-size: 16px;
+    color: #ccc;
+    margin-top: 4px;
+    text-align: center;
+    font-weight: normal;
+    transition: all 0.3s ease;
+}
+
+.bar-text {
+    position: relative;
+    z-index: 2;
+    color: white;
+    font-weight: bold;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.7);
+    white-space: nowrap;
+    padding: 0 5px;
+}
+
+#health-bar, #exp-bar {
+    width: 100%;
+    height: 28px;
+    background-color: #333;
+    border: 1px solid #555;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+#health-fill {
+    height: 100%;
+    background-color: #ff6666;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+}
+
+#exp-bar {
+    display: flex;
+    align-items: center;
+}
+
+#exp-fill {
+    height: 100%;
+    background-color: #66aaff;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+}
+
+/* Style for level up arrow button */
+#level-up-btn.level-up-arrow {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    background-color: #222;
+    color: #fff;
+    border: 2px solid #fff;
+    text-align: center;
+    font-size: 12px;
+    font-family: "Press Start 2P", system-ui;
+    font-weight: 400;
+    cursor: pointer;
+    border-radius: 4px;
+    display: block; /* Always display block */
+    margin-left: 5px;
+    padding: 0;
+    line-height: 20px;
+    transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+    animation: pulse 1.5s infinite;
+}
+
+#level-up-btn.level-up-arrow:hover {
+    background-color: #fff;
+    color: #222;
+    border-color: #fff;
+    transform: scale(1.1);
+}
+
+/* Enhanced button styling when in level-up-ready container */
+.level-container.level-up-ready #level-up-btn.level-up-arrow {
+    color: #4CAF50;
+    border-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.1);
+    text-shadow: 0 0 3px rgba(76, 175, 80, 0.8);
+}
+
+.level-container.level-up-ready #level-up-btn.level-up-arrow:hover {
+    color: #66ff66;
+    border-color: #66ff66;
+    background: rgba(102, 255, 102, 0.15);
+    transform: scale(1.15);
+    box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
+}
+
+/* Add styles when button is hidden but still takes up space */
+#level-up-btn.level-up-arrow[style*="visibility: hidden"] {
+    animation: none;
+    border-color: transparent;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .stats-panel {
+        flex-direction: row;
+        gap: 10px;
+        padding: 0 5px;
+    }
+    
+    .level-container {
+        min-width: 40px;
+    }
+    
+    /* Reduce glow intensity on mobile for better performance */
+    .level-container.level-up-ready {
+        padding: 6px 8px;
+        animation-duration: 2.5s; /* Slightly slower on mobile */
+    }
+    
+    @keyframes level-ready-glow {
+        0% { 
+            box-shadow: 
+                0 0 3px rgba(76, 175, 80, 0.5),
+                0 0 6px rgba(76, 175, 80, 0.3),
+                inset 0 0 6px rgba(76, 175, 80, 0.1);
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.08), rgba(255, 255, 0, 0.03));
+        }
+        50% { 
+            box-shadow: 
+                0 0 5px rgba(255, 255, 0, 0.5),
+                0 0 10px rgba(255, 255, 0, 0.3),
+                inset 0 0 8px rgba(255, 255, 0, 0.1);
+            background: linear-gradient(135deg, rgba(255, 255, 0, 0.1), rgba(76, 175, 80, 0.05));
+        }
+        100% { 
+            box-shadow: 
+                0 0 3px rgba(76, 175, 80, 0.5),
+                0 0 6px rgba(76, 175, 80, 0.3),
+                inset 0 0 6px rgba(76, 175, 80, 0.1);
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.08), rgba(255, 255, 0, 0.03));
+        }
+    }
+    
+    .stat-value {
+        font-size: 20px;
+    }
+    
+    #health-bar, #exp-bar {
+        height: 24px;
+    }
+    
+    #level-up-btn.level-up-arrow {
+        width: 20px;
+        height: 20px;
+        font-size: 14px;
+        line-height: 20px;
+    }
+    
+    #level-icon {
+        width: 20px;
+        height: 20px;
+    }
+}
+
+/* Enhanced pulse animation for the level-up button */
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(45, 105, 48, 0.4); }
+    70% { box-shadow: 0 0 0 5px rgba(45, 105, 48, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(45, 105, 48, 0); }
+}
+
+/* Enhanced level container glow animation when level up is available */
+@keyframes level-ready-glow {
+    0% { 
+        box-shadow: 
+            0 0 5px rgba(76, 175, 80, 0.5),
+            0 0 10px rgba(76, 175, 80, 0.4),
+            0 0 15px rgba(76, 175, 80, 0.3),
+            inset 0 0 10px rgba(76, 175, 80, 0.1);
+        background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(255, 255, 0, 0.05));
+    }
+    50% { 
+        box-shadow: 
+            0 0 8px rgba(255, 255, 0, 0.6),
+            0 0 16px rgba(255, 255, 0, 0.5),
+            0 0 24px rgba(255, 255, 0, 0.4),
+            inset 0 0 15px rgba(255, 255, 0, 0.15);
+        background: linear-gradient(135deg, rgba(255, 255, 0, 0.15), rgba(76, 175, 80, 0.08));
+    }
+    100% { 
+        box-shadow: 
+            0 0 5px rgba(76, 175, 80, 0.5),
+            0 0 10px rgba(76, 175, 80, 0.4),
+            0 0 15px rgba(76, 175, 80, 0.3),
+            inset 0 0 10px rgba(76, 175, 80, 0.1);
+        background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(255, 255, 0, 0.05));
+    }
+}
+
+/* Level container when level up is ready */
+.level-container.level-up-ready {
+    position: relative;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 2px solid rgba(76, 175, 80, 0.6);
+    animation: level-ready-glow 2s infinite ease-in-out;
+    transition: all 0.3s ease;
+}
+
+/* Enhanced styling for all elements within ready level container */
+.level-container.level-up-ready .stat-label {
+    color: #4CAF50;
+    text-shadow: 0 0 4px rgba(76, 175, 80, 0.8);
+    font-weight: bold;
+}
+
+.level-container.level-up-ready .stat-value {
+    color: #66ff66;
+    text-shadow: 0 0 6px rgba(102, 255, 102, 0.8);
+}
+
+.level-container.level-up-ready #player-name {
+    color: #90ff90;
+    text-shadow: 0 0 4px rgba(144, 255, 144, 0.6);
+    font-weight: bold;
+}
+
+/* Enhanced level icon glow when ready */
+.level-container.level-up-ready #level-icon {
+    filter: drop-shadow(0 0 4px rgba(76, 175, 80, 0.8));
+    animation: icon-pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes icon-pulse {
+    0% { filter: drop-shadow(0 0 4px rgba(76, 175, 80, 0.8)); }
+    50% { filter: drop-shadow(0 0 8px rgba(255, 255, 0, 0.9)); }
+    100% { filter: drop-shadow(0 0 4px rgba(76, 175, 80, 0.8)); }
+}
+
+#entity-list {
+    margin-top: 8px;
+}
+.entity-count {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 4px;
+    min-height: 24px;
+}
+.entity-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+}
+.entity-name {
+    flex-grow: 1;
+    font-size: 14px;
+    margin-right: 8px;
+    line-height: 1.2;
+    word-break: break-word;
+}
+.entity-number {
+    font-weight: bold;
+    min-width: 50px;
+    text-align: right;
+    flex-shrink: 0;
+    align-self: flex-start;
+}
+/* Add specific colors later if needed */
+.toggle-container {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-label {
+    margin-left: 5px;
+}
+
+/* Improved button styles */
+button, .toggle-container {
+    margin: 5px;
+    padding: 6px 10px;
+    background-color: #222;
+    color: white;
+    border: 1px solid #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    font-family: "Press Start 2P", system-ui;
+    font-weight: 400;
+    white-space: nowrap;
+}
+
+button:hover {
+    background-color: #fff;
+    color: #222;
+}
+
+/* Map selector styles */
+.map-selector {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 5px;
+}
+
+#map-index-input {
+    width: 60px;
+    padding: 6px 8px;
+    background-color: #333;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 4px;
+    margin-right: 5px;
+    font-size: 14px;
+}
+
+#map-index-input:focus {
+    outline: none;
+    border-color: #66aaff;
+}
+
+#load-map-btn {
+    margin-left: 0;
+}
+
+/* Add class for text canvases to avoid pixelation */
+#game-board td.cleared canvas, 
+#game-board td.revealed:not(.enemy):not(.treasure):not([data-tile-type="TR2"]) canvas {
+    image-rendering: auto;
+    background-color: #333; /* Match the background color of revealed tiles */
+}
+
+/* Pulsing animation for dropped items */
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+}
+
+/* Blue border for tiles revealed by skyglass */
+#game-board td.skyglass-sighted {
+    border: 2px solid #00ccff;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1;
+    animation: highlight-pulse 2s ease-in-out;
+}
+
+/* Animation for skyglass revealed tiles */
+@keyframes highlight-pulse {
+    0% { box-shadow: 0 0 5px 2px rgba(0, 204, 255, 0.2); }
+    50% { box-shadow: 0 0 10px 5px rgba(0, 204, 255, 0.8); }
+    100% { box-shadow: 0 0 5px 2px rgba(0, 204, 255, 0.2); }
+}
+
+/* Highlighted skyglass that can be used - remove border and make styling subtle */
+#game-board td.skyglass-interactive {
+    border: none; /* Remove the yellow border */
+    animation: none; /* Remove the animation */
+    cursor: pointer !important;
+    position: relative;
+    z-index: 2;
+}
+
+/* Remove glow-pulse animation since it makes skyglasses too obvious */
+@keyframes glow-pulse {
+    0% { box-shadow: none; }
+    50% { box-shadow: none; }
+    100% { box-shadow: none; }
+}
+
+/* Also remove the filter effects that make skyglasses stand out */
+#game-board td.revealed canvas.skyglass-canvas {
+    filter: none; /* Remove the brightness and drop-shadow effects */
+}
+
+/* Visual style for revealed skyglasses */
+#game-board td.revealed[data-tile-type="treasure"] canvas {
+    filter: brightness(1.2); /* Make treasures a bit brighter */
+}
+
+/* Ensure monoliths always render with crisp pixelated sprites */
+#game-board canvas.monolith-canvas:not(.text-canvas),
+#game-board canvas.spectral-monolith-canvas:not(.text-canvas) {
+    image-rendering: pixelated !important;
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: -webkit-crisp-edges !important;
+    image-rendering: crisp-edges !important;
+}
+
+/* Add specific styles for text canvases to avoid pixelation */
+#game-board td.cleared canvas.text-canvas, 
+#game-board td.revealed:not(.enemy):not(.treasure) canvas.text-canvas,
+#game-board td.hidden canvas.text-canvas,
+#game-board canvas.text-canvas {
+    image-rendering: auto !important;
+    text-rendering: geometricPrecision;
+    shape-rendering: geometricPrecision;
+    /* Enable subpixel antialiasing for sharper text */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Sound controls styling */
+.sound-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #444;
+}
+
+.sound-control {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sound-control label {
+    margin-right: 10px;
+    color: #ddd;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #444;
+    transition: .4s;
+    border-radius: 20px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+    background-color: #4CAF50;
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+/* Stats row styling */
+.stats-row {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.stat-container {
+    padding: 5px 10px;
+    background-color: #333;
+    border-radius: 4px;
+    min-width: 120px;
+}
+
+/* Hide numeric content in favor of sprites */
+#game-board td.revealed:not(.cleared) {
+    font-size: 0;
+}
+
+/* Entity type colorization */
+.entity-count.trap .entity-name {
+    color: #FF5722;
+}
+
+.entity-count.enemy .entity-name {
+    color: #FF0000;
+}
+
+.entity-count.treasure .entity-name {
+    color: #FFD700;
+}
+
+/* Border styles for revealed entities */
+.trap.revealed {
+    border: 2px solid #FF5722;
+    box-sizing: border-box;
+}
+
+.enemy.revealed {
+    border: 2px solid #FF0000;
+    box-sizing: border-box;
+}
+
+.treasure.revealed {
+    border: 2px solid #FFD700;
+    box-sizing: border-box;
+}
+
+/* Entities popover styling */
+.entities-popover {
+    display: none;
+    position: absolute;
+    top: 40px;
+    right: 10px;
+    background-color: #2d2d2d;
+    border: 1px solid #444;
+    padding: 10px;
+    z-index: 1000;
+    max-height: 400px;
+    overflow-y: auto;
+    flex-direction: column;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+/* How to Play popover styling */
+.how-to-play-popover {
+    display: none; /* Hidden by default */
+    position: absolute;
+    top: 40px; /* Adjust as needed, relative to admin-controls */
+    right: 10px; /* Adjust as needed */
+    background-color: #2d2d2d;
+    border: 1px solid #444;
+    padding: 15px;
+    z-index: 1000;
+    max-height: 70vh; /* Max height to prevent overly long popovers */
+    width: 400px; /* Or a specific width */
+    max-width: 90vw; /* Ensure it doesn't exceed viewport width */
+    overflow-y: auto;
+    flex-direction: column;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
+    color: #e0e0e0;
+    border-radius: 4px;
+}
+
+.how-to-play-popover h2 {
+    margin-top: 0;
+    color: #4CAF50; /* Green title */
+}
+
+.how-to-play-popover p,
+.how-to-play-popover ul {
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+
+.how-to-play-popover ul {
+    padding-left: 20px;
+}
+
+.how-to-play-popover li {
+    margin-bottom: 5px;
+}
+
+.how-to-play-popover strong {
+    color: #f0f0f0;
+}
+
+/* Special styles for the new tile system */
+#game-board td.hidden canvas {
+    filter: brightness(1.1); /* Make hidden tiles slightly brighter */
+}
+
+#game-board td.revealed canvas {
+    filter: brightness(1.0); /* Normal brightness for revealed tiles */
+}
+
+#game-board td.cleared canvas,
+#game-board td.dead canvas,
+#game-board td.claimed canvas {
+    filter: brightness(0.9); /* Slightly darker for cleared/dead/claimed tiles */
+}
+
+/* Special styles for skyglass-interactive tiles */
+#game-board td.skyglass-interactive {
+    animation: glow-pulse 2s infinite;
+    box-shadow: 0 0 8px #00ccff;
+    z-index: 1;
+}
+
+/* Enhanced highlight for tiles revealed by skyglass */
+#game-board td.skyglass-sighted {
+    animation: highlight-pulse 2s 1; /* Run animation once */
+    position: relative;
+    z-index: 1;
+}
+
+/* Responsive design for smaller screens */
+/* Wide screens: Side-by-side layout */
+@media (min-width: 1200px) {
+    .main-game-layout {
+        flex-direction: row;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 20px;
+        max-width: 1400px;
+        padding: 0 20px;
+    }
+    
+    .entities-sidebar {
+        border-top: none;
+        border-left: 2px solid #555;
+        min-width: 450px;
+        max-width: 500px;
+        width: 450px;
+    }
+    
+    .entities-content,
+    .achievements-content,
+    .howtoplay-content {
+        max-height: calc(100vh - 200px);
+    }
+}
+
+/* Medium screens: Reduce sidebar padding */
+@media (max-width: 768px) {
+    .entities-sidebar {
+        padding: 10px;
+    }
+    
+    .panel-tab {
+        font-size: 11px;
+        padding: 6px 2px;
+    }
+    
+    .entities-content,
+    .achievements-content,
+    .howtoplay-content {
+        max-height: 300px;
+    }
+}
+
+/* Small screens: Compact layout */
+@media (max-width: 480px) {
+    .main-game-layout {
+        padding: 0 5px;
+        min-width: 875px; /* Slightly reduced but still accommodate game board */
+    }
+    
+    .panel-tabs {
+        gap: 1px;
+    }
+    
+    .panel-tab {
+        font-size: 10px;
+        padding: 5px 1px;
+    }
+}
+
+/* Remove old achievements section styles - now handled by sidebar panels */
+
+/* Achievement Item Styles for Sidebar Panel */
+.achievement-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.achievement-item.earned {
+    background-color: rgba(76, 175, 80, 0.1);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.achievement-item.not-earned {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.achievement-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.achievement-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 10px;
+    image-rendering: pixelated;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background-color: #222;
+}
+
+.achievement-text {
+    flex: 1;
+    text-align: left;
+}
+
+.achievement-name {
+    font-weight: bold;
+    font-size: 13px;
+    color: #fff;
+    margin-bottom: 2px;
+}
+
+.achievement-item.earned .achievement-name {
+    color: #4CAF50;
+}
+
+.achievement-description {
+    font-size: 11px;
+    color: #ccc;
+    line-height: 1.3;
+}
+
+.achievement-item.not-earned .achievement-description {
+    color: #888;
+}
+
+/* Responsive adjustments for achievements in sidebar */
+@media (max-width: 600px) {
+    .achievement-item {
+        padding: 6px;
+        margin-bottom: 6px;
+    }
+    
+    .achievement-icon {
+        width: 20px;
+        height: 20px;
+        margin-right: 8px;
+    }
+    
+    .achievement-name {
+        font-size: 12px;
+    }
+    
+    .achievement-description {
+        font-size: 10px;
+    }
+}
+
+/* Reset Achievements Button Styles */
+.reset-achievements-btn {
+    width: 100%;
+    margin: 10px 0 15px 0;
+    padding: 8px 12px;
+    background-color: #222;
+    color: white;
+    border: 2px solid #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 8px;
+    font-family: "Press Start 2P", system-ui;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: background-color 0.2s ease;
+}
+
+.reset-achievements-btn:hover {
+    background-color: #fff;
+    color: #222;
+}
+
+.reset-achievements-btn:active {
+    background-color: #ddd;
+    transform: translateY(1px);
+}
+
+/* Cave Details Popover Styles */
+.cave-details-popover {
+    background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+    border: 2px solid #4CAF50;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6), 0 0 20px rgba(76, 175, 80, 0.3);
+    padding: 0;
+    min-width: 280px;
+    max-width: 350px;
+    backdrop-filter: blur(10px);
+    font-family: 'Arial', sans-serif;
+    animation: popoverFadeIn 0.3s ease-out;
+    overflow: hidden;
+    z-index: 1000;
+}
+
+@keyframes popoverFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.cave-details-content {
+    padding: 0;
+}
+
+.cave-details-header {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 18px;
+    text-align: center;
+    padding: 12px 20px;
+    margin: 0;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    letter-spacing: 1px;
+    border-bottom: 2px solid #45a049;
+}
+
+.cave-details-date {
+    color: #87CEEB;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 12px 20px 8px 20px;
+    margin: 0;
+    background: rgba(135, 206, 235, 0.1);
+    border-left: 4px solid #87CEEB;
+}
+
+.cave-details-time {
+    color: #FFD700;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 8px 20px;
+    margin: 0;
+    background: rgba(255, 215, 0, 0.1);
+    border-left: 4px solid #FFD700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cave-details-time::before {
+    content: "⏱️";
+    font-size: 16px;
+}
+
+.cave-details-achievements {
+    padding: 12px 20px 16px 20px;
+    margin: 0;
+    line-height: 1.4;
+    font-weight: 500;
+    min-height: 24px;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.cave-details-achievements:not([style*="italic"]) {
+    color: #98FB98;
+    border-left: 4px solid #98FB98;
+    background: rgba(152, 251, 152, 0.1);
+}
+
+.cave-details-achievements[style*="italic"] {
+    color: #888;
+    border-left: 4px solid #666;
+    background: rgba(136, 136, 136, 0.1);
+}
+
+.cave-details-achievements::before {
+    content: "🏆 ";
+    font-size: 14px;
+    margin-right: 4px;
+}
+
+.cave-details-achievements[style*="italic"]::before {
+    content: "📝 ";
+    filter: grayscale(100%);
+}
+
+/* Enhanced Cave Number Button Styles */
+.cave-number-button {
+    background: #222;
+    color: #ffffff;
+    border: 2px solid #fff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 3px;
+    font-size: 10px;
+    font-family: "Press Start 2P", system-ui;
+    font-weight: 400;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 45px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    text-shadow: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.cave-number-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.5s ease;
+    pointer-events: none;
+}
+
+.cave-number-button:hover {
+    background: #fff;
+    color: #222;
+    border-color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+}
+
+.cave-number-button:hover::before {
+    left: 100%;
+}
+
+.cave-number-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Completed Caves Section Styles */
+.completed-caves-section {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #444;
+}
+
+.completed-caves-header {
+    color: #4CAF50;
+    font-weight: bold;
+    margin-bottom: 10px;
+    font-size: 14px;
+    text-align: center;
+    border-bottom: 1px solid #4CAF50;
+    padding-bottom: 5px;
+}
+
+.completed-caves-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.section-separator {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    margin: 12px 0;
+}
+
+/* Loading overlay styles */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    font-family: monospace;
+}
+
+.loading-content {
+    text-align: center;
+    color: #fff;
+}
+
+.loading-content h2 {
+    font-size: 24px;
+    margin: 0;
+    animation: loading-pulse 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes loading-pulse {
+    0% {
+        opacity: 0.6;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+/* Hide loading overlay when game is loaded */
+.loading-overlay.hidden {
+    display: none;
+}
+
+/* Board Loading Skeleton Styles */
+.board-loading-skeleton {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    margin: 0 auto;
+    border: 2px solid #444;
+    border-radius: 4px;
+    overflow: hidden;
+    background-color: #222;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    position: relative;
+}
+
+.skeleton-grid {
+    display: grid;
+    grid-template-columns: repeat(14, 65px); /* 14 columns, 65px each */
+    grid-template-rows: repeat(10, 65px); /* 10 rows, 65px each */
+    gap: 1px;
+    background-color: #333;
+    padding: 0;
+    margin: 0;
+}
+
+.skeleton-cell {
+    width: 65px;
+    height: 65px;
+    background-color: #2a2a2a;
+    border: 1px solid #555;
+    box-sizing: border-box;
+    animation: skeleton-pulse 2s ease-in-out infinite;
+}
+
+.skeleton-cell:nth-child(odd) {
+    animation-delay: 0.1s;
+}
+
+.skeleton-cell:nth-child(even) {
+    animation-delay: 0.3s;
+}
+
+.skeleton-cell:nth-child(3n) {
+    animation-delay: 0.5s;
+}
+
+@keyframes skeleton-pulse {
+    0% {
+        background-color: #2a2a2a;
+        opacity: 0.6;
+    }
+    50% {
+        background-color: #3a3a3a;
+        opacity: 0.8;
+    }
+    100% {
+        background-color: #2a2a2a;
+        opacity: 0.6;
+    }
+}
+
+.loading-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 20px 30px;
+    border-radius: 8px;
+    border: 2px solid #555;
+    backdrop-filter: blur(5px);
+    z-index: 10;
+}
+
+.loading-text h2 {
+    margin: 0 0 10px 0;
+    font-size: 24px;
+    font-family: "Press Start 2P", system-ui;
+    animation: loading-pulse 1.5s ease-in-out infinite alternate;
+    color: #4CAF50;
+}
+
+.loading-text p {
+    margin: 0;
+    font-size: 12px;
+    color: #ccc;
+    font-family: "Press Start 2P", system-ui;
+}
+
+/* Stats Loading Skeleton Styles */
+.stats-loading-skeleton {
+    width: 100%;
+    border: 1px solid #555;
+    padding: 10px;
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    margin-top: 0;
+}
+
+.skeleton-stats-panel {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    gap: 20px;
+    padding: 0 10px;
+}
+
+.skeleton-player-container {
+    width: 128px;
+    height: 128px;
+    background-color: #333;
+    border-radius: 8px;
+    animation: skeleton-pulse 2s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+.skeleton-level-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 60px;
+    gap: 10px;
+}
+
+.skeleton-bars-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+    padding-left: 5px;
+    margin-right: 20px;
+}
+
+.skeleton-bar {
+    height: 28px;
+    background-color: #333;
+    border: 1px solid #555;
+    border-radius: 4px;
+    animation: skeleton-pulse 2s ease-in-out infinite;
+    position: relative;
+    overflow: hidden;
+}
+
+.skeleton-bar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    animation: skeleton-shimmer 2s infinite;
+}
+
+@keyframes skeleton-shimmer {
+    0% {
+        left: -100%;
+    }
+    100% {
+        left: 100%;
+    }
+}
+
+/* Responsive adjustments for skeleton */
+@media (max-width: 600px) {
+    .skeleton-grid {
+        grid-template-columns: repeat(14, 60px);
+        grid-template-rows: repeat(10, 60px);
+    }
+    
+    .skeleton-cell {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .skeleton-stats-panel {
+        flex-direction: row;
+        gap: 10px;
+        padding: 0 5px;
+    }
+    
+    .skeleton-player-container {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .skeleton-bar {
+        height: 24px;
+    }
+    
+    .loading-text h2 {
+        font-size: 20px;
+    }
+    
+    .loading-text p {
+        font-size: 10px;
+    }
+}
+
+/* Crystal-specific styles */
+.entity-icon.crystal-composite {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.crystal-quadrant-info {
+    font-size: 8px;
+    color: #aaa;
+    margin-top: 2px;
+    font-style: italic;
+}
+
+/* Enhance crystal visibility on the game board */
+#game-board td.revealed canvas.crystal-canvas {
+    filter: brightness(1.1) saturate(1.2);
+    box-shadow: 0 0 3px rgba(255, 255, 255, 0.3);
+}
+
+/* Add visual effects for oozes that change color */
+#game-board td.revealed canvas.ooze-canvas {
+    filter: brightness(1.1) saturate(1.3);
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+/* Add shimmer effect for both crystals and oozes */
+@keyframes ooze-crystal-shimmer {
+    0% { filter: brightness(1.1) saturate(1.3); }
+    50% { filter: brightness(1.4) saturate(1.6); }
+    100% { filter: brightness(1.1) saturate(1.3); }
+}
+
+#game-board td.revealed canvas.ooze-canvas:hover {
+    animation: ooze-crystal-shimmer 1.5s infinite ease-in-out;
+}
+
+/* Add subtle animation for crystal tiles */
+@keyframes crystal-shimmer {
+    0% { filter: brightness(1.1) saturate(1.2); }
+    50% { filter: brightness(1.3) saturate(1.4); }
+    100% { filter: brightness(1.1) saturate(1.2); }
+}
+
+#game-board td.revealed canvas.crystal-canvas:hover {
+    animation: crystal-shimmer 2s infinite ease-in-out;
+}
+
+/* Crystal pattern reward styling */
+#game-board td.crystal-pattern-reward {
+    background-color: #4d4d15; /* Golden-yellow background for pattern rewards */
+    cursor: pointer; /* Can be clicked to claim */
+    animation: crystal-pattern-pulse 2s infinite; /* Add pulsing animation */
+}
+
+@keyframes crystal-pattern-pulse {
+    0% { 
+        box-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+        background-color: #4d4d15;
+    }
+    50% { 
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.8);
+        background-color: #6d6d25;
+    }
+    100% { 
+        box-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+        background-color: #4d4d15;
+    }
+}
+
+/* ========== NEW DUAL STATE CSS SYSTEM ========== */
+
+/* Visibility states */
+#game-board td.visibility-hidden {
+    background-color: #2c3e50;
+}
+
+#game-board td.visibility-revealed {
+    background-color: #ecf0f1;
+}
+
+/* Content states */
+#game-board td.content-alive {
+    /* Base revealed tile styling - inherit from visibility-revealed */
+}
+
+#game-board td.content-dying {
+    background-color: #e67e22 !important;
+    animation: dying-pulse 0.5s ease-in-out infinite alternate;
+}
+
+#game-board td.content-dead {
+    background-color: #e74c3c !important;
+}
+
+#game-board td.content-claimed {
+    background-color: #27ae60 !important;
+}
+
+#game-board td.content-triggered {
+    background-color: #f39c12 !important;
+}
+
+#game-board td.visibility-revealed.content-empty {
+    background-color: #95a5a6 !important;
+    border: 2px solid #ffffff !important; /* White border for cleared tiles - ONLY when revealed */
+    box-sizing: border-box;
+}
+
+/* Special states for entity types - ONLY when revealed */
+#game-board td.visibility-revealed.content-alive.enemy {
+    border: 2px solid #ff6666;
+}
+
+#game-board td.visibility-revealed.content-alive.treasure {
+    border: 2px solid #4CAF50;
+}
+
+#game-board td.visibility-revealed.content-alive.skyglass-interactive {
+    animation: glow-pulse 2s ease-in-out infinite;
+    border: 2px solid #00bcd4;
+}
+
+/* Dying animation */
+@keyframes dying-pulse {
+    0% { 
+        background-color: #e67e22;
+        transform: scale(1);
+    }
+    100% { 
+        background-color: #d35400;
+        transform: scale(1.05);
+    }
+}
+
+/* Inventory System Styles - positioned at far right */
+.inventory-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0; /* Prevent inventory from shrinking */
+    min-width: 80px;
+}
+
+.inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 4px;
+    width: 72px; /* Fixed width for 2x2 grid */
+}
+
+.inventory-slot {
+    width: 34px;
+    height: 34px;
+    background-color: #333;
+    border: 2px solid #555;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.inventory-slot:hover {
+    border-color: #777;
+    background-color: #444;
+}
+
+.inventory-slot.has-item {
+    border-color: #8B4513;
+    background-color: #3a2818;
+}
+
+.inventory-slot.has-item:hover {
+    border-color: #CD853F;
+    background-color: #4a3020;
+}
+
+.inventory-slot canvas {
+    width: 30px;
+    height: 30px;
+    image-rendering: pixelated;
+}
+
+.inventory-slot.empty canvas {
+    display: none;
+}
+
+/* Crystal Sequence Styles - Horizontal Layout */
+.crystal-sequence-horizontal {
+    display: flex;
+    flex-direction: row;
+    gap: 15px;
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #1a1a1a;
+    border: 2px solid #444;
+    border-radius: 5px;
+    justify-content: center;
+    align-items: center;
+}
+
+.crystal-sequence-item-horizontal {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    background-color: #333;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    min-width: 60px;
+    position: relative;
+}
+
+.crystal-sequence-item-horizontal.completed {
+    background-color: #2d4a2d;
+    border: 1px solid #4a7c4a;
+}
+
+.crystal-sprite-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.crystal-sprite-canvas {
+    width: 32px;
+    height: 32px;
+    image-rendering: pixelated;
+    border-radius: 3px;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.crystal-sequence-item-horizontal .crystal-name {
+    font-size: 8px;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.crystal-sequence-item-horizontal .checkmark {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    color: #4a7c4a;
+    font-size: 14px;
+    font-weight: bold;
+    background-color: #2d4a2d;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #4a7c4a;
+}
+
+/* Dialog System Styles */
+.dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.dialog-content {
+    background-color: #2a2a2a;
+    border: 3px solid #8B4513;
+    border-radius: 8px;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    color: #fff;
+    font-family: "Press Start 2P", system-ui;
+}
+
+.dialog-header {
+    background-color: #8B4513;
+    padding: 10px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #654321;
+}
+
+.dialog-header h3 {
+    margin: 0;
+    font-size: 14px;
+    color: #fff;
+}
+
+.dialog-close {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0;
+    width: 25px;
+    height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+}
+
+.dialog-close:hover {
+    background-color: rgba(255, 0, 0, 0.3);
+}
+
+.dialog-body {
+    padding: 20px;
+    line-height: 1.6;
+}
+
+.dialog-body p {
+    margin: 0 0 15px 0;
+    font-size: 10px;
+}
+
+/* Update stats panel to use flexbox layout */
+.stats-panel {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 15px;
+    padding: 10px;
+    background-color: #1a1a1a;
+    border: 2px solid #444;
+    border-radius: 8px;
+    color: #fff;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.level-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 60px;
+    flex-shrink: 0;
+}
+
+.level-display {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+#level-icon {
+    width: 24px;
+    height: 24px;
+    image-rendering: pixelated;
+    margin-right: 2px;
+}
+
+.progress-text {
+    font-size: 9px;
+    color: #ccc;
+    text-align: center;
+    margin: 10px 0 !important;
+}
+
+.hint-text {
+    font-size: 8px;
+    color: #aaa;
+    font-style: italic;
+    text-align: center;
+    margin: 5px 0 !important;
+}

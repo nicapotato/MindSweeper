@@ -1,0 +1,103 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Mindsweeper Game Architecture
+
+Grid generator Python Solver Script: (uv python) lang-python/fastapi-backend/ds_data_app/logic/or_tools/mindsweeper/CSAT_board_solver/mindsweeper_grid_generator.py
+
+## Overview
+WebGame Entrypoint and js files: [index.html](mdc:index.html)
+Data driven software design - Take json to inform internal code parameters: [config_v2.json](mdc:config_v2.json)
+MindSweeper is a modern take on the classic Minesweeper game with RPG elements, featuring multiple themes, achievements, and advanced gameplay mechanics. The codebase is organized into specialized modules for better maintainability and development.
+
+Code Philosophy:
+- DO NOT OVER ENGIEENR: Concise which complains loud and early when new code causes faults.
+- Aggressive assert statements in the runtime code rather than allowing for fallbacks and excessive replacing nulls with a default value
+- YOUR CODE IS THE ONLY FUTURE: Always replace old cold with new code, do not try to be backwards compatible because it makes things less clear and changeable in the future. New code is a new feature, and the work is only complete if the new code has been introduced and replaced the old code (removing old code), and all the test pass.
+- Use Concise Code Comments, focusing on architecture and core game loop design. The Comment reader is an experienced programmer (10+ year experience)
+
+Code Agent Directives:
+- Always test the code using playwright framework using `make test-load` for routine quick checks to ensure all the code loads in the client, as this is the core prerequisite of my game product.
+- Use `make test` for more comprenhensive and time consuming testing. (lang-js/nextjs-frontend/public/games/mindsweeper/makefile)
+
+## Project Structure
+
+### Root Files
+- `index.html` - Main HTML entry point with game UI layout and structure
+- `styles.css` - Global CSS styles for the game interface
+- `config.json` - Game configuration and settings
+- `package.json` - Node.js dependencies and scripts
+- `package-lock.json` - Lock file for exact dependency versions
+- `makefile` - Build and test automation commands
+- `playwright.config.js` - Test configuration for Playwright framework
+- `PROGRAM-NOTES.md` - Core program outline, design structure, and game loop documentation
+- `ms-test.md` - Testing documentation and notes
+- `mindsweeper-008.jpg` - Game screenshot or reference image
+
+### Source Code (`src/`)
+Core JavaScript modules organized by functionality:
+
+- `main.js` - Primary game initialization and coordination
+- `mind-game.js` - Core game logic and mechanics
+- `state.js` - Game state management and persistence
+- `tile-logic.js` - Tile-based game logic (mine detection, clearing, etc.)
+- `updateGameBoard.js` - Game board rendering and updates
+- `ui.js` - User interface management and event handling
+- `handleRightClick.js` - Right-click interaction handling
+- `sprite-render.js` - Sprite rendering and graphics management
+- `player.js` - Player state, stats, and progression
+- `achievements.js` - Achievement system implementation
+- `audio.js` - Audio management and sound effects
+- `utils.js` - Utility functions and helpers
+
+### Assets (`assets-nb/`)
+Game graphics and visual assets:
+
+- `big-red-dragon.png` - Large dragon sprite
+- `cat-spritesheet-nb.png` - Cat character spritesheet
+- `icons16x16.png` - UI icons at 16x16 resolution
+- `mindsweeper-nb-16x16-cat.png` - Cat-themed game tiles
+- `mindsweeper-nb-16x16-dragons.png` - Dragon-themed game tiles
+- `mindweeper-nb-16x16-rough.png` - Rough/draft tile designs
+- `skulls-32b32.png` - Skull sprites at 32x32 resolution
+- `skulls-64b64.png` - Skull sprites at 64x64 resolution
+- `tile-16x16.png` - Basic tile graphics
+- `tiny_dungeon_monsters.png` - Monster sprites for dungeon theme
+
+### Audio (`audio/`)
+Sound effects and music files:
+
+- `click.wav` - UI click sound
+- `crystal.mp3` - Crystal/gem collection sound
+- `crystals-reveal.mp3` - Crystal reveal audio
+- `fight-1.wav` - Combat sound effect
+- `grampa-doggy-dog.mp3` - Character/ambient sound
+- `level-up.mp3` - Level progression sound
+- `mc-lovin-reverb-2.wav` - Ambient audio with reverb
+- `mc-lovin.wav` - Base ambient audio
+- `mindtricks-greeting.mp3` - Game greeting/intro audio
+- `mleb-1.wav`, `mleb-2.wav`, `mleb-3.wav` - Sound effect variations
+- `modern-creativity-instrumental.mp3` - Background music
+- `monolith-warn.mp3` - Warning/alert sound
+
+### Testing (`tests/`)
+Test suite and automation:
+
+- `game-load-simple.spec.js` - Basic game loading tests
+- `game-load.spec.js` - Comprehensive game loading tests
+- `minimal-test.spec.js` - Minimal test cases
+- `README.md` - Testing documentation
+- `fixtures/test-helpers.js` - Test utility functions and helpers
+- `test-results/` - Directory for test output and reports
+
+### Game Data
+- `solutions/` - Directory containing game solution files
+  - `1749747802-s-v0_0_8-multi_486.json` - Saved game solution/state
+
+## Entry Points
+- **Main Entry**: [index.html](mdc:lang-js/nextjs-frontend/public/games/mindsweeper/index.html) - Game HTML structure and UI layout
+- **NextJS Integration**: [page.jsx](mdc:lang-js/nextjs-frontend/src/app/console/games/mindsweeper/[version]/page.jsx) - NextJS page wrapper
+
+Mindsweeper Core program outline, design structure, core loop in [PROGRAM-NOTES.md](mdc:PROGRAM-NOTES.md)

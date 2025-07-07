@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<head>
+    <title>MINDSWEEPER</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Load assert module first - required for all other modules -->
+    <script src="src/assert.js"></script>
+</head>
+<body onload="onLoadPage()">
+    <div class="title-bar">
+        <h1>MINDSWEEPER</h1>
+        <div class="settings-controls">
+            <button id="settings-btn">Settings</button>
+            <div id="settings-popover" class="settings-popover">
+                <!-- User Settings Section (Always Visible) -->
+                <div class="user-settings-section">
+                    <!-- Sound Controls -->
+                    <div class="sound-controls">
+                        <div class="sound-control">
+                            <label for="music-toggle">Background Music</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="music-toggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="sound-control">
+                            <label for="sound-toggle">Sound Effects</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="sound-toggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Theme Selector -->
+                    <div class="theme-selector">
+                        <label for="theme-select">Art Theme</label>
+                        <select id="theme-select">
+                            <!-- Options will be populated dynamically from config -->
+                        </select>
+                    </div>
+                    
+                    <!-- Admin Mode Toggle (for demo purposes) -->
+                    <div class="admin-mode-toggle">
+                        <label class="toggle-container">
+                            <input type="checkbox" id="admin-mode-toggle">
+                            <span class="toggle-label">Admin Mode</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Admin Settings Section (Admin Only) -->
+                <div id="admin-settings-section" class="admin-settings-section" style="display: none;">
+                    <div class="settings-separator"></div>
+                    <div class="admin-label">Admin Controls</div>
+                    
+                    <button id="reveal-all-btn">Reveal All</button>
+                    <button id="hide-all-btn">Hide All</button>
+                    <div class="map-selector">
+                        <input type="number" id="map-index-input" min="0" placeholder="Map #">
+                        <button id="load-map-btn">Load Map</button>
+                    </div>
+                    <label class="toggle-container">
+                        <input type="checkbox" id="sprite-mode-toggle" checked>
+                        <span class="toggle-label">Sprite Mode</span>
+                    </label>
+                    <label class="toggle-container">
+                        <input type="checkbox" id="god-mode-toggle">
+                        <span class="toggle-label">GOD MODE</span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Hidden entities popover to prevent JavaScript errors -->
+            <div id="entities-popover" class="entities-popover" style="display: none;">
+                <!-- This element is expected by the JavaScript but not actively used with the sidebar -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main game layout container -->
+    <div class="main-game-layout">
+        <!-- Game board container -->
+        <div id="game-container">
+            <!-- Loading skeleton for the game board -->
+            <div id="board-loading-skeleton" class="board-loading-skeleton">
+                <div class="skeleton-grid">
+                    <!-- Grid will be populated by JavaScript based on config -->
+                </div>
+                <div class="loading-text">
+                    <h2>LOADING...</h2>
+                    <p>Preparing your cave...</p>
+                </div>
+            </div>
+            
+            <!-- Actual game board (hidden until loaded) -->
+            <table id="game-board" style="display: none;"></table>
+            
+            <!-- Loading skeleton for player stats -->
+            <div id="stats-loading-skeleton" class="stats-loading-skeleton">
+                <div class="skeleton-stats-panel">
+                    <div class="skeleton-player-container"></div>
+                    <div class="skeleton-level-container">
+                        <div class="skeleton-bar"></div>
+                        <div class="skeleton-bar"></div>
+                    </div>
+                    <div class="skeleton-bars-container">
+                        <div class="skeleton-bar"></div>
+                        <div class="skeleton-bar"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Actual player stats (hidden until loaded) -->
+            <div id="player-stats" style="display: none;">
+                <div class="stats-panel">
+                    <div class="player-container">
+                        <canvas id="player-sprite" width="128" height="128"></canvas>
+                    </div>
+                    <div class="level-container">
+                        <div class="stat-label">Level</div>
+                        <div class="level-display">
+                            <canvas id="level-icon" width="16" height="16"></canvas>
+                            <div id="player-level" class="stat-value">1</div>
+                            <button id="level-up-btn" class="level-up-arrow">↑</button>
+                        </div>
+                        <div id="player-name">McLovin'</div>
+                    </div>
+                    <div class="bars-container">
+                        <div class="bar-wrapper">
+                            <div class="stat-label">Health</div>
+                            <div id="health-bar">
+                                <div id="health-fill" style="width: 100%;">
+                                    <span id="player-health" class="bar-text">200/200</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bar-wrapper">
+                            <div class="stat-label">Experience</div>
+                            <div id="exp-bar">
+                                <div id="exp-fill">
+                                    <span id="player-exp" class="bar-text">0/5</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Inventory Section -->
+                    <div class="inventory-container">
+                        <div class="stat-label">Inventory</div>
+                        <div class="inventory-grid">
+                            <div class="inventory-slot" id="inventory-slot-0">
+                                <canvas width="32" height="32"></canvas>
+                            </div>
+                            <div class="inventory-slot" id="inventory-slot-1">
+                                <canvas width="32" height="32"></canvas>
+                            </div>
+                            <div class="inventory-slot" id="inventory-slot-2">
+                                <canvas width="32" height="32"></canvas>
+                            </div>
+                            <div class="inventory-slot" id="inventory-slot-3">
+                                <canvas width="32" height="32"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Entities sidebar -->
+        <div class="entities-sidebar">
+            <button id="new-map-btn" class="new-map-btn">New Cave</button>
+            <div class="sidebar-header">
+                <h3>Game Information</h3>
+                <div class="panel-tabs">
+                    <button class="panel-tab active" data-panel="entities">Entities</button>
+                    <button class="panel-tab" data-panel="achievements">Achievements</button>
+                    <button class="panel-tab" data-panel="howtoplay">How to Play</button>
+                </div>
+            </div>
+            
+            <!-- Entity Panel -->
+            <div id="entities-panel" class="sidebar-panel active">
+                <div class="entities-content">
+                    <div id="entity-list"></div>
+                </div>
+            </div>
+            
+            <!-- Achievements Panel -->
+            <div id="achievements-panel" class="sidebar-panel">
+                <div class="achievements-content">
+                    <button id="reset-achievements-btn" class="reset-achievements-btn">Reset Achievements</button>
+                    <div id="achievements-list"></div>
+                </div>
+            </div>
+            
+            <!-- How to Play Panel -->
+            <div id="howtoplay-panel" class="sidebar-panel">
+                <div class="howtoplay-content">
+                    <h4>How to Play MindSweeper</h4>
+                    <p>
+                        <strong>Objective:</strong> Defeat the Ancient Meeoeomoower, the ultimate cat boss! Make sure to level up before taking on more dangerous felines. MindSweeper is like the classic game Minesweeper, but with RPG elements! Find treasures and defeat cat enemies to gain experience and level up, carefully managing your health.
+                    </p>
+                    <p>
+                        <strong>START:</strong> Click the blue spyglass (Skyglass/Telescope) on the map to reveal an initial area and begin your adventure!
+                    </p>
+                    
+                    <h5>Clicking Tiles:</h5>
+                    <ul>
+                        <li>Click a hidden tile to reveal it.</li>
+                        <li>If it's an empty tile, it might show a number. This number indicates the sum of levels of adjacent hostile creatures.</li>
+                        <li>If it's a neutral entity (like a treasure or a Skyglass), click it again to interact (claim treasure, use Skyglass).</li>
+                        <li>If it's a hostile creature, clicking its hidden tile will reveal it and you'll immediately take damage equal to its level. Slaying an enemy will give experience equal to its level.</li>
+                    </ul>
+                    
+                    <h5>Player Stats:</h5>
+                    <ul>
+                        <li><strong>Health:</strong> Decreases when you take damage from hostile creatures or trigger traps. If your health drops to 0 or lower, the game is over, so try to stay at 1 HP minimum! Health potions restore 8 HP. Enemy level is how much damage it will do to your health.</li>
+                        <li><strong>Experience (EXP):</strong> Gained by defeating enemies (trading health for EXP), claiming treasures, or using certain items. Fill the EXP bar to become eligible to level up.</li>
+                        <li><strong>Level Up:</strong> When the EXP bar is full, click the "↑" button to level up. This increases your max health and restores your current health to full. Managing your health by strategically gaining EXP and leveling up is key.</li>
+                    </ul>
+                    
+                    <h5>Special Tiles & Items:</h5>
+                    <ul>
+                        <li><strong>Skyglass/Telescope:</strong> Reveals a random 3x3 area of the map.</li>
+                        <li><strong>Chests:</strong> May contain health potions or bonus experience.</li>
+                        <li><strong>Rat King / Mister Man:</strong> Defeating these special enemies drops an item. Click the item to activate its effect (e.g., reveal all rats, weaken mines).</li>
+                        <li><strong>Brick Wall/Traps:</strong> Clicking these will damage you.</li>
+                    </ul>
+                    
+                    <h5>Annotations:</h5>
+                    <p><em>(Right-Click or Shift+Click or Long Press on Mobile)</em></p>
+                    <ul>
+                        <li>Mark hidden tiles with numbers, an asterisk (*), or an 'F' (friendly) to help you remember what might be underneath.</li>
+                    </ul>
+                    
+                    <h5>Winning/Losing:</h5>
+                    <ul>
+                        <li><strong>Win:</strong> Defeat the "Ancient Meeoeomoower" (the ultimate cat boss) to win the game!</li>
+                        <li><strong>Lose:</strong> If your health drops to 0, the game is over.</li>
+                    </ul>
+                    
+                    <p><strong>Good luck, MindSweeper!</strong></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Load modules in dependency order -->
+    <!-- Glofetch('config.json')bal variables and constants first -->
+    <!-- <script src="game-globals.js"></script> -->
+    
+    <!-- Independent modules -->
+    <script src="src/audio.js"></script>
+    <script src="src/utils.js"></script>
+    <script src="src/ui.js"></script>
+    <script src="src/achievements.js"></script>
+    <script src="src/inventory.js"></script>
+    
+    <!-- v2.0 Entity System -->
+    <script src="src/entity-manager.js"></script>
+
+    <script src="src/state.js"></script>
+    <script src="src/sprite-render.js"></script>
+    
+    <!-- Tile and interaction modules -->
+    <script src="src/tile-logic.js"></script>
+    <script src="src/handleRightClick.js"></script>
+    <script src="src/updateGameBoard.js"></script>
+
+    <!-- Player modules -->
+    <script src="src/player.js"></script>
+    
+    <!-- Legacy main game file (partially refactored) -->
+    <script src="src/mind-game.js"></script>
+    
+    <!-- Main initialization -->
+    <script src="src/main.js"></script>
+</body>
