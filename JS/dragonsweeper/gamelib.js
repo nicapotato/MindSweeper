@@ -86,7 +86,7 @@ function loadImage(path, fnAfterLoad)
 {
     pendingStuffToLoad += 1;
     let ret = new Image();
-    ret.src = "/games/dragonsweeper/data/"+path;
+    ret.src = "data/"+path;
     ret.onload = function()
     {
         pendingStuffToLoad -= 1;

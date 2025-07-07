@@ -29,39 +29,39 @@ class MindsweeperAudio {
             // Check if audio already initialized
             if (!this.backgroundMusic) {
                 // Initialize background music
-                this.backgroundMusic = new Audio('../../audio/modern-creativity-instrumental.mp3');
+                this.backgroundMusic = new Audio('audio/modern-creativity-instrumental.mp3');
                 this.backgroundMusic.loop = true;
                 this.backgroundMusic.volume = 0.5;
                 
                 // Initialize click sound
-                this.clickSound = new Audio('../../audio/click.wav');
+                this.clickSound = new Audio('audio/click.wav');
                 this.clickSound.volume = 0.1; // Lowered from 0.3
                 
                 // Initialize new game sounds
-                this.creatureKillSound = new Audio('../../audio/fight-1.wav');
+                this.creatureKillSound = new Audio('audio/fight-1.wav');
                 this.creatureKillSound.volume = 0.1;
                 
-                this.playerDeathSound = new Audio('../../audio/mleb-3.wav');
+                this.playerDeathSound = new Audio('audio/mleb-3.wav');
                 this.playerDeathSound.volume = 0.4;
                 
-                this.mcLovinSound = new Audio('../../audio/mc-lovin-reverb-2.wav');
+                this.mcLovinSound = new Audio('audio/mc-lovin-reverb-2.wav');
                 this.mcLovinSound.volume = 0.5;
                 
-                this.victorySound = new Audio('../../audio/mleb-1.wav');
+                this.victorySound = new Audio('audio/mleb-1.wav');
                 this.victorySound.volume = 0.6;
                 
-                this.crystalSound = new Audio('../../audio/crystal.mp3');
+                this.crystalSound = new Audio('audio/crystal.mp3');
                 this.crystalSound.volume = 0.4;
                 
                 // Initialize monolith sounds
-                this.monolithWarnSound = new Audio('../../audio/monolith-warn.mp3');
+                this.monolithWarnSound = new Audio('audio/monolith-warn.mp3');
                 this.monolithWarnSound.volume = 0.5;
                 
-                this.crystalRevealSound = new Audio('../../audio/crystals-reveal.mp3');
+                this.crystalRevealSound = new Audio('audio/crystals-reveal.mp3');
                 this.crystalRevealSound.volume = 1.0;
                 
                 // Initialize level up sound
-                this.levelUpSound = new Audio('../../audio/level-up.mp3');
+                this.levelUpSound = new Audio('audio/level-up.mp3');
                 this.levelUpSound.volume = 0.6;
                 
                 // Load audio files to make them ready to play

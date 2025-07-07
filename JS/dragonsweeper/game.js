@@ -2912,7 +2912,7 @@ function onUpdate(phase, dt)
             {
                 sndEvents[eventId] = [];
             }
-            sndEvents[eventId].push(loadSound("/games/dragonsweeper/data/"+path));
+            sndEvents[eventId].push(loadSound("data/"+path));
         }
     }
     else if(phase == UpdatePhase.Loading)
