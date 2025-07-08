@@ -1,16 +1,18 @@
 #include "board.h"
+#include "config.h"
 #include "load_media.h"
+
+// Static game configuration - loaded once at startup
+static GameConfig g_config = {0};
+static bool g_config_loaded = false;
 
 bool board_calloc_arrays(struct Board *b);
 void board_free_arrays(struct Board *b);
-bool board_push_check(struct Board *b, int row, int column);
-struct Pos board_pop_check(struct Board *b);
-bool board_uncover(struct Board *b);
-void board_reveal(struct Board *b);
-void board_check_won(struct Board *b);
+void board_finish_animation(struct Board *b, unsigned row, unsigned col);
+unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state);
 
 bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
-               unsigned columns, int scale, int mine_count) {
+               unsigned columns, int scale) {
     *board = calloc(1, sizeof(struct Board));
     if (!*board) {
         fprintf(stderr, "Error in calloc of new board.\n");
@@ -22,18 +24,41 @@ bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
     b->rows = rows;
     b->columns = columns;
     b->scale = scale;
-    b->mine_count = mine_count;
-    b->game_status = 0;
-    b->first_turn = true;
+    b->theme = 0;
 
-    if (!load_media_sheet(b->renderer, &b->image, "images/board.png",
-                          PIECE_SIZE, PIECE_SIZE, &b->src_rects)) {
+    // Load game configuration if not already loaded
+    if (!g_config_loaded) {
+#ifdef WASM_BUILD
+        if (!config_load(&g_config, "config_v2.json")) {
+#else
+        if (!config_load(&g_config, "config_v2.json")) {
+#endif
+            fprintf(stderr, "Failed to load game config\n");
+            return false;
+        }
+        g_config_loaded = true;
+        printf("Loaded %u entities from config\n", g_config.entity_count);
+    }
+
+    // Load entity sprites (dragons theme)
+    if (!load_media_sheet(b->renderer, &b->entity_sprites, 
+                          "images/mindsweeper-nb-16x16-dragons.png",
+                          PIECE_SIZE, PIECE_SIZE, &b->entity_src_rects)) {
+        fprintf(stderr, "Failed to load entity sprites\n");
+        return false;
+    }
+
+    // Load tile sprites for TILE_HIDDEN variations
+    if (!load_media_sheet(b->renderer, &b->tile_sprites, 
+                          "images/tile-16x16.png",
+                          PIECE_SIZE, PIECE_SIZE, &b->tile_src_rects)) {
+        fprintf(stderr, "Failed to load tile sprites\n");
         return false;
     }
 
     board_set_scale(b, b->scale);
 
-    if (!board_reset(b, b->mine_count, true)) {
+    if (!board_reset(b)) {
         return false;
     }
 
@@ -46,19 +71,27 @@ void board_free(struct Board **board) {
 
         board_free_arrays(b);
 
-        if (b->src_rects) {
-            free(b->src_rects);
-            b->src_rects = NULL;
+        if (b->entity_src_rects) {
+            free(b->entity_src_rects);
+            b->entity_src_rects = NULL;
         }
 
-        if (b->image) {
-            SDL_DestroyTexture(b->image);
-            b->image = NULL;
+        if (b->entity_sprites) {
+            SDL_DestroyTexture(b->entity_sprites);
+            b->entity_sprites = NULL;
+        }
+
+        if (b->tile_src_rects) {
+            free(b->tile_src_rects);
+            b->tile_src_rects = NULL;
+        }
+
+        if (b->tile_sprites) {
+            SDL_DestroyTexture(b->tile_sprites);
+            b->tile_sprites = NULL;
         }
 
         b->renderer = NULL;
-
-        b = NULL;
 
         free(*board);
         *board = NULL;
@@ -68,312 +101,122 @@ void board_free(struct Board **board) {
 }
 
 bool board_calloc_arrays(struct Board *b) {
-    b->front_array = calloc(b->rows, sizeof(unsigned *));
-    if (!b->front_array) {
-        fprintf(stderr, "Error in calloc of front array rows!\n");
+    size_t total_tiles = (size_t)(b->rows * b->columns);
+
+    b->entity_ids = calloc(total_tiles, sizeof(unsigned));
+    if (!b->entity_ids) {
         return false;
     }
 
-    for (unsigned r = 0; r < b->rows; r++) {
-        b->front_array[r] = calloc(b->columns, sizeof(unsigned));
-        if (!b->front_array[r]) {
-            fprintf(stderr, "Error in calloc of front array columns!\n");
-            return false;
-        }
-    }
-
-    b->back_array = calloc(b->rows, sizeof(unsigned *));
-    if (!b->back_array) {
-        fprintf(stderr, "Error in calloc of back array rows!\n");
+    b->tile_states = calloc(total_tiles, sizeof(TileState));
+    if (!b->tile_states) {
         return false;
     }
 
-    for (unsigned r = 0; r < b->rows; r++) {
-        b->back_array[r] = calloc(b->columns, sizeof(unsigned));
-        if (!b->back_array[r]) {
-            fprintf(stderr, "Error in calloc of back array columns!\n");
-            return false;
-        }
+    b->animations = calloc(total_tiles, sizeof(TileAnimation));
+    if (!b->animations) {
+        return false;
+    }
+
+    b->display_sprites = calloc(total_tiles, sizeof(unsigned));
+    if (!b->display_sprites) {
+        return false;
+    }
+
+    // Allocate tile variation arrays
+    b->tile_variations = calloc(total_tiles, sizeof(unsigned));
+    if (!b->tile_variations) {
+        return false;
+    }
+
+    b->tile_rotations = calloc(total_tiles, sizeof(unsigned));
+    if (!b->tile_rotations) {
+        return false;
     }
 
     return true;
 }
 
 void board_free_arrays(struct Board *b) {
-    if (b->front_array) {
-        for (unsigned r = 0; r < b->rows; r++) {
-            if (b->front_array[r]) {
-                free(b->front_array[r]);
-            }
-        }
-        free(b->front_array);
-        b->front_array = NULL;
+    if (b->entity_ids) {
+        free(b->entity_ids);
+        b->entity_ids = NULL;
     }
-
-    if (b->back_array) {
-        for (unsigned r = 0; r < b->rows; r++) {
-            if (b->back_array[r]) {
-                free(b->back_array[r]);
-            }
-        }
-        free(b->back_array);
-        b->back_array = NULL;
+    if (b->tile_states) {
+        free(b->tile_states);
+        b->tile_states = NULL;
+    }
+    if (b->animations) {
+        free(b->animations);
+        b->animations = NULL;
+    }
+    if (b->display_sprites) {
+        free(b->display_sprites);
+        b->display_sprites = NULL;
+    }
+    if (b->tile_variations) {
+        free(b->tile_variations);
+        b->tile_variations = NULL;
+    }
+    if (b->tile_rotations) {
+        free(b->tile_rotations);
+        b->tile_rotations = NULL;
     }
 }
 
-bool board_reset(struct Board *b, int mine_count, bool full_reset) {
-    b->mine_count = mine_count;
+bool board_reset(struct Board *b) {
+    board_free_arrays(b);
 
-    if (full_reset) {
-        board_free_arrays(b);
-
-        if (!board_calloc_arrays(b)) {
-            return false;
-        }
-
-        for (unsigned r = 0; r < b->rows; r++) {
-            for (unsigned c = 0; c < b->columns; c++) {
-                b->front_array[r][c] = 9;
-            }
-        }
-    } else {
-        for (unsigned r = 0; r < b->rows; r++) {
-            for (unsigned c = 0; c < b->columns; c++) {
-                unsigned elem = b->front_array[r][c];
-                b->front_array[r][c] =
-                    ((elem == 10) || (elem == 11)) ? elem : 9;
-            }
-        }
-    }
-
-    for (unsigned r = 0; r < b->rows; r++) {
-        for (unsigned c = 0; c < b->columns; c++) {
-            b->back_array[r][c] = 0;
-        }
-    }
-
-    int add_mines = b->mine_count;
-    while (add_mines > 0) {
-        int r = rand() % (int)b->rows;
-        int c = rand() % (int)b->columns;
-        if (!b->back_array[r][c]) {
-            b->back_array[r][c] = 13;
-            add_mines--;
-        }
-    }
-
-    for (int row = 0; row < (int)b->rows; row++) {
-        for (int column = 0; column < (int)b->columns; column++) {
-            unsigned close_mines = 0;
-            if (b->back_array[row][column] == 13) {
-                continue;
-            }
-            for (int r = row - 1; r < row + 2; r++) {
-                if (r >= 0 && r < (int)b->rows) {
-                    for (int c = column - 1; c < column + 2; c++) {
-                        if (c >= 0 && c < (int)b->columns) {
-                            if (b->back_array[r][c] == 13) {
-                                close_mines++;
-                            }
-                        }
-                    }
-                }
-            }
-            b->back_array[row][column] = close_mines;
-        }
-    }
-
-    b->game_status = 0;
-    b->first_turn = true;
-    b->mines_marked = 0;
-
-    return true;
-}
-
-int board_game_status(const struct Board *b) { return b->game_status; }
-
-int board_mines_marked(const struct Board *b) { return b->mines_marked; }
-
-bool board_is_pressed(const struct Board *b) { return b->pressed; }
-
-bool board_push_check(struct Board *b, int row, int column) {
-    struct Node *node = calloc(1, sizeof(struct Node));
-    if (!node) {
-        fprintf(stderr, "Error in calloc of check Node.\n");
+    if (!board_calloc_arrays(b)) {
         return false;
     }
 
-    node->row = row;
-    node->column = column;
-
-    node->next = b->check_head;
-    b->check_head = node;
-
-    return true;
-}
-
-struct Pos board_pop_check(struct Board *b) {
-    struct Pos pos;
-    if (b->check_head) {
-        pos.row = b->check_head->row;
-        pos.column = b->check_head->column;
-    } else {
-        pos.row = 0;
-        pos.column = 0;
-    }
-
-    struct Node *node = b->check_head;
-    b->check_head = b->check_head->next;
-    free(node);
-
-    return pos;
-}
-
-bool board_uncover(struct Board *b) {
-    while (b->check_head) {
-        struct Pos pos = board_pop_check(b);
-
-        for (int r = pos.row - 1; r < pos.row + 2; r++) {
-            if (r < 0 || r >= (int)b->rows) {
-                continue;
-            }
-            for (int c = pos.column - 1; c < pos.column + 2; c++) {
-                if (c < 0 || c >= (int)b->columns) {
-                    continue;
-                }
-                if (b->front_array[r][c] == 9) {
-                    b->front_array[r][c] = b->back_array[r][c];
-                    if (b->front_array[r][c] == 0) {
-                        if (!board_push_check(b, r, c)) {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
+    // Initialize all tiles as hidden with empty entities (entity ID 0)
+    size_t total_tiles = (size_t)(b->rows * b->columns);
+    for (size_t i = 0; i < total_tiles; i++) {
+        b->entity_ids[i] = 0;        // Empty entity
+        b->tile_states[i] = TILE_HIDDEN;
+        b->animations[i].type = ANIM_NONE;
+        b->display_sprites[i] = SPRITE_HIDDEN;  // Hidden sprite from main.h
+        
+        // Generate random variations for TILE_HIDDEN tiles (indices 5-7 as requested)
+        b->tile_variations[i] = 5 + (rand() % 3);  // Random from 5, 6, 7
+        b->tile_rotations[i] = rand() % 4;          // Random rotation 0-3 (0°, 90°, 180°, 270°)
     }
 
     return true;
 }
 
-void board_reveal(struct Board *b) {
-    for (unsigned row = 0; row < b->rows; row++) {
-        for (unsigned column = 0; column < b->columns; column++) {
-            if (b->front_array[row][column] == 9 &&
-                b->back_array[row][column] == 13) {
-                b->front_array[row][column] = 13;
-            }
-            if (b->front_array[row][column] == 10 &&
-                b->back_array[row][column] != 13) {
-                b->front_array[row][column] = 15;
-            }
+bool board_load_solution(struct Board *b, const char *solution_file, unsigned solution_index) {
+    SolutionData solution = {0};
+    
+    if (!config_load_solution(&solution, solution_file, solution_index)) {
+        fprintf(stderr, "Failed to load solution\n");
+        return false;
+    }
+    
+    printf("Loaded solution %u: %s (%ux%u)\n", solution_index, solution.uuid, solution.rows, solution.cols);
+    
+    // Ensure board size matches solution
+    if (solution.rows != b->rows || solution.cols != b->columns) {
+        fprintf(stderr, "Solution size (%ux%u) doesn't match board size (%ux%u)\n",
+                solution.rows, solution.cols, b->rows, b->columns);
+        config_free_solution(&solution);
+        return false;
+    }
+    
+    // Load entity IDs from solution
+    for (unsigned r = 0; r < b->rows; r++) {
+        for (unsigned c = 0; c < b->columns; c++) {
+            unsigned entity_id = solution.board[r][c];
+            board_set_entity_id(b, r, c, entity_id);
+            
+            // All tiles start hidden
+            board_set_tile_state(b, r, c, TILE_HIDDEN);
         }
     }
-}
-
-void board_check_won(struct Board *b) {
-    for (unsigned row = 0; row < b->rows; row++) {
-        for (unsigned column = 0; column < b->columns; column++) {
-            if (b->back_array[row][column] != 13) {
-                if (b->front_array[row][column] != b->back_array[row][column]) {
-                    return;
-                }
-            }
-        }
-    }
-    b->game_status = 1;
-}
-
-void board_mouse_down(struct Board *b, int x, int y, Uint8 button) {
-    b->pressed = false;
-
-    if (x < b->rect.x || x > b->rect.x + b->rect.w) {
-        return;
-    }
-    if (y < b->rect.y || y > b->rect.y + b->rect.h) {
-        return;
-    }
-
-    int row = (y - b->rect.y) / b->piece_size;
-    int column = (x - b->rect.x) / b->piece_size;
-
-    if (button == SDL_BUTTON_LEFT) {
-        if (b->front_array[row][column] == 9) {
-            b->pressed = true;
-        }
-    } else if (button == SDL_BUTTON_RIGHT) {
-        if (b->front_array[row][column] > 8 &&
-            b->front_array[row][column] < 12) {
-            b->pressed = true;
-        }
-    }
-}
-
-bool board_mouse_up(struct Board *b, int x, int y, Uint8 button) {
-    if (!b->pressed) {
-        return true;
-    }
-    b->pressed = false;
-    b->mines_marked = 0;
-
-    if (x < b->rect.x || x > b->rect.x + b->rect.w) {
-        return true;
-    }
-    if (y < b->rect.y || y > b->rect.y + b->rect.h) {
-        return true;
-    }
-
-    int row = (y - b->rect.y) / b->piece_size;
-    int column = (x - b->rect.x) / b->piece_size;
-
-    if (button == SDL_BUTTON_LEFT) {
-        if (b->front_array[row][column] == 9) {
-            while (true) {
-                if (b->back_array[row][column] == 13) {
-                    b->game_status = -1;
-                    b->front_array[row][column] = 14;
-                } else {
-                    b->front_array[row][column] = b->back_array[row][column];
-                    if (b->front_array[row][column] == 0) {
-                        if (!board_push_check(b, row, column)) {
-                            return false;
-                        }
-                        if (!board_uncover(b)) {
-                            return false;
-                        }
-                    }
-                    board_check_won(b);
-                }
-                if (b->first_turn && b->game_status != 0) {
-                    if (!board_reset(b, b->mine_count, false)) {
-                        return false;
-                    }
-                } else {
-                    break;
-                }
-            }
-            b->first_turn = false;
-
-            if (b->game_status != 0) {
-                board_reveal(b);
-            }
-
-            return true;
-        }
-    }
-
-    if (button == SDL_BUTTON_RIGHT) {
-        if (b->front_array[row][column] == 9) {
-            b->front_array[row][column]++;
-            b->mines_marked = -1;
-        } else if (b->front_array[row][column] == 10) {
-            b->front_array[row][column]++;
-            b->mines_marked = 1;
-        } else if (b->front_array[row][column] == 11) {
-            b->front_array[row][column] = 9;
-        }
-    }
-
+    
+    config_free_solution(&solution);
     return true;
 }
 
@@ -382,29 +225,278 @@ void board_set_scale(struct Board *b, int scale) {
     b->piece_size = PIECE_SIZE * b->scale;
     b->rect.x = (PIECE_SIZE - BORDER_LEFT) * b->scale;
     b->rect.y = BORDER_HEIGHT * b->scale;
-    b->rect.w = (int)b->columns * b->piece_size + b->rect.x;
-    b->rect.h = (int)b->rows * b->piece_size + b->rect.y;
+    b->rect.w = (int)b->columns * b->piece_size;
+    b->rect.h = (int)b->rows * b->piece_size;
 }
 
-void board_set_theme(struct Board *b, unsigned theme) { b->theme = theme * 16; }
+void board_set_theme(struct Board *b, unsigned theme) { 
+    b->theme = theme;
+}
 
 void board_set_size(struct Board *b, unsigned rows, unsigned columns) {
     board_free_arrays(b);
     b->rows = rows;
     b->columns = columns;
-    b->rect.w = (int)b->columns * b->piece_size + b->rect.x;
-    b->rect.h = (int)b->rows * b->piece_size + b->rect.y;
+    b->rect.w = (int)b->columns * b->piece_size;
+    b->rect.h = (int)b->rows * b->piece_size;
+}
+
+// Core game state access
+unsigned board_get_entity_id(const struct Board *b, unsigned row, unsigned col) {
+    if (row >= b->rows || col >= b->columns) {
+        return 0; // Return empty entity for out of bounds
+    }
+    size_t index = (size_t)(row * b->columns + col);
+    return b->entity_ids[index];
+}
+
+void board_set_entity_id(struct Board *b, unsigned row, unsigned col, unsigned entity_id) {
+    if (row >= b->rows || col >= b->columns) {
+        return; // Ignore out of bounds
+    }
+    size_t index = (size_t)(row * b->columns + col);
+    b->entity_ids[index] = entity_id;
+}
+
+TileState board_get_tile_state(const struct Board *b, unsigned row, unsigned col) {
+    if (row >= b->rows || col >= b->columns) {
+        return TILE_HIDDEN; // Return hidden for out of bounds
+    }
+    size_t index = (size_t)(row * b->columns + col);
+    return b->tile_states[index];
+}
+
+void board_set_tile_state(struct Board *b, unsigned row, unsigned col, TileState state) {
+    if (row >= b->rows || col >= b->columns) {
+        return; // Ignore out of bounds
+    }
+    size_t index = (size_t)(row * b->columns + col);
+    b->tile_states[index] = state;
+    
+    // Update display sprite immediately if not animating
+    if (b->animations[index].type == ANIM_NONE) {
+        unsigned entity_id = b->entity_ids[index];
+        b->display_sprites[index] = get_entity_sprite_index(entity_id, state);
+    }
+}
+
+// Animation system
+void board_start_animation(struct Board *b, unsigned row, unsigned col, 
+                          AnimationType type, Uint32 duration_ms, bool blocks_input) {
+    if (row >= b->rows || col >= b->columns) {
+        return;
+    }
+    
+    size_t index = (size_t)(row * b->columns + col);
+    TileAnimation *anim = &b->animations[index];
+    
+    anim->type = type;
+    anim->start_time = SDL_GetTicks();
+    anim->duration_ms = duration_ms;
+    anim->blocks_input = blocks_input;
+    
+    // Set animation sprites based on type
+    unsigned entity_id = b->entity_ids[index];
+    TileState tile_state = b->tile_states[index];
+    
+    switch (type) {
+        case ANIM_REVEALING:
+            anim->start_sprite = SPRITE_HIDDEN;
+            anim->end_sprite = get_entity_sprite_index(entity_id, TILE_REVEALED);
+            break;
+        case ANIM_COMBAT:
+        case ANIM_DYING:
+        case ANIM_TREASURE_CLAIM:
+        case ANIM_ENTITY_TRANSITION:
+            anim->start_sprite = get_entity_sprite_index(entity_id, tile_state);
+            anim->end_sprite = get_entity_sprite_index(entity_id, tile_state);
+            break;
+        default:
+            anim->start_sprite = b->display_sprites[index];
+            anim->end_sprite = b->display_sprites[index];
+            break;
+    }
+    
+    b->display_sprites[index] = anim->start_sprite;
+}
+
+bool board_is_tile_animating(const struct Board *b, unsigned row, unsigned col) {
+    if (row >= b->rows || col >= b->columns) {
+        return false;
+    }
+    size_t index = (size_t)(row * b->columns + col);
+    return b->animations[index].type != ANIM_NONE;
+}
+
+void board_update_animations(struct Board *b) {
+    Uint32 current_time = SDL_GetTicks();
+    
+    for (unsigned r = 0; r < b->rows; r++) {
+        for (unsigned c = 0; c < b->columns; c++) {
+            size_t index = (size_t)(r * b->columns + c);
+            TileAnimation *anim = &b->animations[index];
+            
+            if (anim->type != ANIM_NONE) {
+                if (current_time >= anim->start_time + anim->duration_ms) {
+                    // Animation finished
+                    board_finish_animation(b, r, c);
+                } else {
+                    // Update animation progress
+                    float progress = (float)(current_time - anim->start_time) / anim->duration_ms;
+                    
+                    // For now, simple sprite transition (could add interpolation later)
+                    if (progress > 0.5f) {
+                        b->display_sprites[index] = anim->end_sprite;
+                    } else {
+                        b->display_sprites[index] = anim->start_sprite;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void board_finish_animation(struct Board *b, unsigned row, unsigned col) {
+    size_t index = (size_t)(row * b->columns + col);
+    TileAnimation *anim = &b->animations[index];
+    
+    // Set final sprite
+    b->display_sprites[index] = anim->end_sprite;
+    
+    // Clear animation
+    anim->type = ANIM_NONE;
+    
+    printf("Animation finished for tile [%u,%u]\n", row, col);
+}
+
+// Game logic
+bool board_handle_click(struct Board *b, unsigned row, unsigned col) {
+    if (row >= b->rows || col >= b->columns) {
+        return false;
+    }
+    
+    // Check if tile is blocked by animation
+    if (board_is_tile_animating(b, row, col)) {
+        size_t index = (size_t)(row * b->columns + col);
+        if (b->animations[index].blocks_input) {
+            return false; // Input blocked during animation
+        }
+    }
+    
+    TileState current_state = board_get_tile_state(b, row, col);
+    unsigned entity_id = board_get_entity_id(b, row, col);
+    
+    if (current_state == TILE_HIDDEN) {
+        // Reveal tile
+        printf("Revealing tile [%u,%u] with entity %u\n", row, col, entity_id);
+        
+        // 1. IMMEDIATE logical state update (like JS)
+        board_set_tile_state(b, row, col, TILE_REVEALED);
+        
+        // 2. Start visual animation
+        board_start_animation(b, row, col, ANIM_REVEALING, 800, false); // 0.8s reveal
+        
+        return true;
+    } else {
+        // Tile already revealed - handle combat/treasure/etc
+        Entity *entity = config_get_entity(&g_config, entity_id);
+        if (entity) {
+            printf("Clicking revealed tile [%u,%u]: %s (level %u)\n", 
+                   row, col, entity->name, entity->level);
+            
+            if (entity->is_enemy) {
+                // Start combat animation
+                board_start_animation(b, row, col, ANIM_COMBAT, 500, false);
+            } else if (entity->is_treasure) {
+                // Start treasure claim animation  
+                board_start_animation(b, row, col, ANIM_TREASURE_CLAIM, 300, false);
+            }
+        }
+        
+        return true;
+    }
+}
+
+unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state) {
+    if (tile_state == TILE_HIDDEN) {
+        return SPRITE_HIDDEN;
+    }
+    
+    // For revealed tiles, use entity's sprite position
+    Entity *entity = config_get_entity(&g_config, entity_id);
+    if (entity) {
+        // Convert 2D sprite position to 1D index
+        // Assuming 16 sprites per row in the sprite sheet
+        return entity->sprite_pos.y * 16 + entity->sprite_pos.x;
+    }
+    
+    // Default to cleared sprite if entity not found
+    return SPRITE_CLEARED;
 }
 
 void board_draw(const struct Board *b) {
     SDL_Rect dest_rect = {0, 0, b->piece_size, b->piece_size};
+    
     for (unsigned r = 0; r < b->rows; r++) {
-        dest_rect.y = (int)r * dest_rect.h + b->rect.y;
+        dest_rect.y = (int)r * b->piece_size + b->rect.y;
         for (unsigned c = 0; c < b->columns; c++) {
-            dest_rect.x = (int)c * dest_rect.w + b->rect.x;
-            unsigned rect_index = b->front_array[r][c];
-            SDL_RenderCopy(b->renderer, b->image,
-                           &b->src_rects[rect_index + b->theme], &dest_rect);
+            dest_rect.x = (int)c * b->piece_size + b->rect.x;
+            
+            size_t index = (size_t)(r * b->columns + c);
+            TileState tile_state = b->tile_states[index];
+            
+            if (tile_state == TILE_HIDDEN) {
+                // Use tile sprites with random variations (indices 5-7) and rotations
+                unsigned tile_variation = b->tile_variations[index];
+                unsigned rotation = b->tile_rotations[index];
+                
+                // Ensure tile variation is valid
+                if (tile_variation < 256) { // Assuming max 256 sprites in tile sheet
+                    // Apply rotation by setting the rotation angle
+                    double angle = rotation * 90.0; // 0°, 90°, 180°, 270°
+                    SDL_Point center = {b->piece_size / 2, b->piece_size / 2};
+                    
+                    SDL_RenderCopyEx(b->renderer, b->tile_sprites,
+                                   &b->tile_src_rects[tile_variation], &dest_rect,
+                                   angle, &center, SDL_FLIP_NONE);
+                }
+            } else {
+                // TILE_REVEALED: use entity sprites
+                unsigned sprite_index = b->display_sprites[index];
+                
+                // Ensure sprite index is valid
+                if (sprite_index < 256) { // Assuming max 256 sprites in sheet
+                    SDL_RenderCopy(b->renderer, b->entity_sprites,
+                                   &b->entity_src_rects[sprite_index], &dest_rect);
+                }
+            }
         }
     }
+}
+
+// ========== ADMIN FUNCTIONS ==========
+
+void board_reveal_all_tiles(struct Board *b) {
+    printf("Revealing all %ux%u tiles...\n", b->rows, b->columns);
+    
+    for (unsigned r = 0; r < b->rows; r++) {
+        for (unsigned c = 0; c < b->columns; c++) {
+            TileState current_state = board_get_tile_state(b, r, c);
+            
+            if (current_state == TILE_HIDDEN) {
+                // Reveal the tile immediately (no animation for admin reveal)
+                board_set_tile_state(b, r, c, TILE_REVEALED);
+                
+                // Update display sprite immediately
+                size_t index = (size_t)(r * b->columns + c);
+                unsigned entity_id = b->entity_ids[index];
+                b->display_sprites[index] = get_entity_sprite_index(entity_id, TILE_REVEALED);
+                
+                // Clear any ongoing animation
+                b->animations[index].type = ANIM_NONE;
+            }
+        }
+    }
+    
+    printf("All tiles revealed!\n");
 }

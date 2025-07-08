@@ -23,7 +23,7 @@ endif
 CFLAGS_STRICT	= -Wstrict-aliasing=2 -Wall -Wextra -Werror -Wpedantic \
 				  -Wwrite-strings -Wconversion -Wmissing-declarations \
 				  -Wmissing-include-dirs -Wfloat-equal -Wsign-compare -Wundef \
-				  -Wcast-align -Wswitch-default -Wimplicit-fallthrough \
+				  -Wcast-align -Wimplicit-fallthrough \
 				  -Wempty-body -Wuninitialized -Wmisleading-indentation \
 				  -Wshadow -Wmissing-prototypes -Wstrict-prototypes \
 				  -Wold-style-definition
@@ -60,8 +60,8 @@ endif
 
 ifndef WASM
 ifeq ($(PKG_CONFIG),yes)
-    CFLAGS_BASE += $(shell pkg-config --cflags sdl2 SDL2_image)
-    LDLIBS_BASE += $(shell pkg-config --libs sdl2 SDL2_image)
+    CFLAGS_BASE += $(shell pkg-config --cflags sdl2 SDL2_image) -I$(shell brew --prefix cjson)/include
+    LDLIBS_BASE += $(shell pkg-config --libs sdl2 SDL2_image) -L$(shell brew --prefix cjson)/lib -lcjson
 else
     $(error "pkg-config is not available. Please install pkg-config.")
 endif

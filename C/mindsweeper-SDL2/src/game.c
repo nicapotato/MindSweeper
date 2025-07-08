@@ -10,10 +10,8 @@ bool game_create_string(char **game_str, const char *new_str);
 void game_set_title(struct Game *g);
 bool game_reset(struct Game *g);
 void game_set_scale(struct Game *g);
-void game_toggel_scale(struct Game *g);
+void game_toggle_scale(struct Game *g);
 void game_set_theme(struct Game *g, unsigned theme);
-bool game_set_difficulty(struct Game *g, double difficulty,
-                         const char *diff_str);
 bool game_set_size(struct Game *g, unsigned rows, unsigned columns, int scale,
                    const char *size_str);
 void game_mouse_down(struct Game *g, int x, int y, Uint8 button);
@@ -50,12 +48,9 @@ bool game_new(struct Game **game) {
     struct Game *g = *game;
 
     g->is_running = true;
-    g->is_playing = true;
-    g->rows = 9;
-    g->columns = 9;
+    g->rows = 10;      // Match config_v2.json
+    g->columns = 14;   // Match config_v2.json
     g->scale = 2;
-    g->mine_count = 8;
-    g->difficulty = 0.1;
 
     if (!game_init_sdl(g)) {
         return false;
@@ -65,12 +60,17 @@ bool game_new(struct Game **game) {
         return false;
     }
 
-    if (!board_new(&g->board, g->renderer, g->rows, g->columns, g->scale,
-                   g->mine_count)) {
+    if (!board_new(&g->board, g->renderer, g->rows, g->columns, g->scale)) {
         return false;
     }
 
-    if (!mines_new(&g->mines, g->renderer, g->scale, g->mine_count)) {
+    // Load solution data
+#ifdef WASM_BUILD
+    if (!board_load_solution(g->board, "latest-s-v0_0_9.json", 0)) {
+#else
+    if (!board_load_solution(g->board, "latest-s-v0_0_9.json", 0)) {
+#endif
+        fprintf(stderr, "Failed to load solution data\n");
         return false;
     }
 
@@ -82,15 +82,18 @@ bool game_new(struct Game **game) {
         return false;
     }
 
-    if (!game_create_string(&g->diff_str, "Easy")) {
+    if (!player_panel_new(&g->player_panel, g->renderer, g->columns, g->scale)) {
         return false;
     }
 
-    if (!game_create_string(&g->size_str, "Tiny")) {
+    if (!game_create_string(&g->size_str, "MindSweeper")) {
         return false;
     }
 
     game_set_title(g);
+    
+    // Initialize player stats and admin panel
+    game_init_player_stats(g);
 
     return true;
 }
@@ -101,14 +104,9 @@ void game_free(struct Game **game) {
 
         border_free(&g->border);
         board_free(&g->board);
-        mines_free(&g->mines);
         clock_free(&g->clock);
         face_free(&g->face);
-
-        if (g->diff_str) {
-            free(g->diff_str);
-            g->diff_str = NULL;
-        }
+        player_panel_free(&g->player_panel);
 
         if (g->size_str) {
             free(g->size_str);
@@ -128,8 +126,6 @@ void game_free(struct Game **game) {
         IMG_Quit();
         SDL_Quit();
 
-        g = NULL;
-
         free(*game);
         *game = NULL;
 
@@ -143,45 +139,37 @@ bool game_create_string(char **game_str, const char *new_str) {
         *game_str = NULL;
     }
 
-    size_t length = (size_t)(snprintf(NULL, 0, "%s", new_str) + 1);
-
-    *game_str = calloc(1, sizeof(char) * length);
+    size_t len = strlen(new_str);
+    *game_str = calloc(len + 1, sizeof(char));
     if (!*game_str) {
-        fprintf(stderr, "Error in calloc of difficulty/size string.\n");
+        fprintf(stderr, "Error in calloc of game string.\n");
         return false;
     }
 
-    snprintf(*game_str, length, "%s", new_str);
+    strcpy(*game_str, new_str);
 
     return true;
 }
 
 void game_set_title(struct Game *g) {
-    int length = snprintf(NULL, 0, "%s - %s - %s", WINDOW_TITLE, g->size_str,
-                          g->diff_str) +
-                 1;
-    char title_str[length];
+    char *title = calloc(256, sizeof(char));
+    if (!title) {
+        return;
+    }
 
-    snprintf(title_str, (size_t)length, "%s - %s - %s", WINDOW_TITLE,
-             g->size_str, g->diff_str);
+    snprintf(title, 256, "%s - %s", WINDOW_TITLE, g->size_str);
+    SDL_SetWindowTitle(g->window, title);
 
-    SDL_SetWindowTitle(g->window, title_str);
+    free(title);
 }
 
 bool game_reset(struct Game *g) {
-    g->mine_count = (int)((double)(g->rows * g->columns) * g->difficulty);
-
-    if (!board_reset(g->board, g->mine_count, true)) {
+    if (!board_reset(g->board)) {
         return false;
     }
 
-    mines_reset(g->mines, g->mine_count);
     clock_reset(g->clock);
     face_default(g->face);
-
-    game_set_title(g);
-
-    g->is_playing = true;
 
     return true;
 }
@@ -189,34 +177,21 @@ bool game_reset(struct Game *g) {
 void game_set_scale(struct Game *g) {
     border_set_scale(g->border, g->scale);
     board_set_scale(g->board, g->scale);
-    mines_set_scale(g->mines, g->scale);
     clock_set_scale(g->clock, g->scale);
     face_set_scale(g->face, g->scale);
-
-    int window_width =
-        (PIECE_SIZE * ((int)g->columns + 1) - BORDER_LEFT + BORDER_RIGHT) *
-        g->scale;
-    int window_height =
-        (PIECE_SIZE * ((int)g->rows) + BORDER_HEIGHT + BORDER_BOTTOM) *
-        g->scale;
-    SDL_SetWindowSize(g->window, window_width, window_height);
-    SDL_SetWindowPosition(g->window, SDL_WINDOWPOS_CENTERED,
-                          SDL_WINDOWPOS_CENTERED);
+    player_panel_set_scale(g->player_panel, g->scale);
 }
 
-void game_toggel_scale(struct Game *g) {
-    g->scale = (g->scale == 1) ? 2 : (g->scale == 2) ? 3 : 1;
+void game_toggle_scale(struct Game *g) {
+    g->scale = (g->scale == 1) ? 2 : 1;
     game_set_scale(g);
 }
 
 void game_set_theme(struct Game *g, unsigned theme) {
-    unsigned binary_theme = (theme < 6) ? 0 : 1;
-    unsigned face_theme = (theme < 3) ? 0 : (theme < 6) ? 1 : 2;
+    border_set_theme(g->border, theme);
     board_set_theme(g->board, theme);
-    border_set_theme(g->border, binary_theme);
-    mines_set_theme(g->mines, binary_theme);
-    clock_set_theme(g->clock, binary_theme);
-    face_set_theme(g->face, face_theme);
+    clock_set_theme(g->clock, theme);
+    face_set_theme(g->face, theme);
 }
 
 bool game_set_size(struct Game *g, unsigned rows, unsigned columns, int scale,
@@ -225,31 +200,18 @@ bool game_set_size(struct Game *g, unsigned rows, unsigned columns, int scale,
     g->columns = columns;
     g->scale = scale;
 
+    border_set_size(g->border, g->rows, g->columns);
+    board_set_size(g->board, g->rows, g->columns);
+    face_set_size(g->face, g->columns);
+    player_panel_set_size(g->player_panel, g->columns);
+
+    game_set_scale(g);
+
     if (!game_create_string(&g->size_str, size_str)) {
         return false;
     }
 
-    border_set_size(g->border, g->rows, g->columns);
-    board_set_size(g->board, g->rows, g->columns);
-    clock_set_size(g->clock, g->columns);
-    face_set_size(g->face, g->columns);
-
-    game_set_scale(g);
-
-    if (!game_reset(g)) {
-        return false;
-    }
-
-    return true;
-}
-
-bool game_set_difficulty(struct Game *g, double difficulty,
-                         const char *diff_str) {
-    g->difficulty = difficulty;
-
-    if (!game_create_string(&g->diff_str, diff_str)) {
-        return false;
-    }
+    game_set_title(g);
 
     if (!game_reset(g)) {
         return false;
@@ -259,49 +221,34 @@ bool game_set_difficulty(struct Game *g, double difficulty,
 }
 
 void game_mouse_down(struct Game *g, int x, int y, Uint8 button) {
-    if (button == SDL_BUTTON_LEFT) {
-        face_mouse_click(g->face, x, y, true);
-    }
-
-    if (g->is_playing) {
-        board_mouse_down(g->board, x, y, button);
-        if (board_is_pressed(g->board)) {
-            face_question(g->face);
-        }
-    }
+    (void)g;
+    (void)x;
+    (void)y;
+    (void)button;
+    
+    // Simplified - no mouse interaction for now
 }
 
 bool game_mouse_up(struct Game *g, int x, int y, Uint8 button) {
-    if (button == SDL_BUTTON_LEFT) {
-        if (face_mouse_click(g->face, x, y, false)) {
-            if (!game_reset(g)) {
+    (void)button;
+    
+    // Convert screen coordinates to board coordinates
+    int board_x = x - g->board->rect.x;
+    int board_y = y - g->board->rect.y;
+    
+    if (board_x >= 0 && board_y >= 0 && 
+        board_x < g->board->rect.w && board_y < g->board->rect.h) {
+        
+        unsigned col = (unsigned)(board_x / g->board->piece_size);
+        unsigned row = (unsigned)(board_y / g->board->piece_size);
+        
+        if (row < g->board->rows && col < g->board->columns) {
+            if (!board_handle_click(g->board, row, col)) {
                 return false;
             }
         }
     }
-
-    if (g->is_playing) {
-        if (!board_mouse_up(g->board, x, y, button)) {
-            return false;
-        }
-
-        if (board_mines_marked(g->board) == 1) {
-            mines_increment(g->mines);
-        } else if (board_mines_marked(g->board) == -1) {
-            mines_decrement(g->mines);
-        }
-
-        if (board_game_status(g->board) == 1) {
-            face_won(g->face);
-            g->is_playing = false;
-        } else if (board_game_status(g->board) == -1) {
-            face_lost(g->face);
-            g->is_playing = false;
-        } else {
-            face_default(g->face);
-        }
-    }
-
+    
     return true;
 }
 
@@ -323,56 +270,18 @@ bool game_events(struct Game *g) {
             break;
         case SDL_KEYDOWN:
             switch (g->event.key.keysym.scancode) {
-            case SDL_SCANCODE_ESCAPE:
-                g->is_running = false;
-                break;
-            case SDL_SCANCODE_B:
-                game_toggel_scale(g);
-                break;
-            case SDL_SCANCODE_N:
-                if (!game_reset(g)) {
+            case SDL_SCANCODE_SPACE:
+                if (!game_reset(g))
                     return false;
-                }
+                break;
+            case SDL_SCANCODE_Z:
+                game_toggle_scale(g);
                 break;
             case SDL_SCANCODE_1:
                 game_set_theme(g, 0);
                 break;
             case SDL_SCANCODE_2:
                 game_set_theme(g, 1);
-                break;
-            case SDL_SCANCODE_3:
-                game_set_theme(g, 2);
-                break;
-            case SDL_SCANCODE_4:
-                game_set_theme(g, 3);
-                break;
-            case SDL_SCANCODE_5:
-                game_set_theme(g, 4);
-                break;
-            case SDL_SCANCODE_6:
-                game_set_theme(g, 5);
-                break;
-            case SDL_SCANCODE_7:
-                game_set_theme(g, 6);
-                break;
-            case SDL_SCANCODE_8:
-                game_set_theme(g, 7);
-                break;
-            case SDL_SCANCODE_A:
-                if (!game_set_difficulty(g, 0.1, "Easy"))
-                    return false;
-                break;
-            case SDL_SCANCODE_S:
-                if (!game_set_difficulty(g, 0.133, "Medium"))
-                    return false;
-                break;
-            case SDL_SCANCODE_D:
-                if (!game_set_difficulty(g, 0.166, "Hard"))
-                    return false;
-                break;
-            case SDL_SCANCODE_F:
-                if (!game_set_difficulty(g, 0.2, "Very Hard"))
-                    return false;
                 break;
             case SDL_SCANCODE_Q:
                 if (!game_set_size(g, 9, 9, 2, "Tiny"))
@@ -394,6 +303,33 @@ bool game_events(struct Game *g) {
                 if (!game_set_size(g, 40, 80, 1, "Huge"))
                     return false;
                 break;
+            // Admin Panel Controls
+            case SDL_SCANCODE_F1:
+                game_toggle_admin_panel(g);
+                break;
+            case SDL_SCANCODE_F2:
+                game_admin_god_mode(g);
+                break;
+            case SDL_SCANCODE_F3:
+                game_admin_reveal_all(g);
+                break;
+            case SDL_SCANCODE_F4:
+                if (!game_admin_load_map(g, g->admin.current_solution_index + 1)) {
+                    printf("Failed to load next map\n");
+                }
+                break;
+            case SDL_SCANCODE_F5:
+                if (g->admin.current_solution_index > 0) {
+                    if (!game_admin_load_map(g, g->admin.current_solution_index - 1)) {
+                        printf("Failed to load previous map\n");
+                    }
+                } else {
+                    printf("Already at first map (0)\n");
+                }
+                break;
+            case SDL_SCANCODE_F12:
+                game_print_admin_help();
+                break;
             default:
                 break;
             }
@@ -407,9 +343,11 @@ bool game_events(struct Game *g) {
 }
 
 void game_update(struct Game *g) {
-    if (g->is_playing) {
-        clock_update(g->clock);
-    }
+    // Update board animations
+    board_update_animations(g->board);
+    
+    // Update other game systems
+    clock_update(g->clock);
 }
 
 void game_draw(const struct Game *g) {
@@ -417,9 +355,9 @@ void game_draw(const struct Game *g) {
 
     border_draw(g->border);
     board_draw(g->board);
-    mines_draw(g->mines);
     clock_draw(g->clock);
     face_draw(g->face);
+    player_panel_draw(g->player_panel, &g->player);
 
     SDL_RenderPresent(g->renderer);
 }
@@ -449,4 +387,236 @@ bool game_run(struct Game *g) {
 
     return true;
 #endif
+}
+
+// ========== PLAYER STATS FUNCTIONS ==========
+
+void game_init_player_stats(struct Game *g) {
+    g->player.level = 1;
+    g->player.max_health = game_calculate_max_health(g->player.level);
+    g->player.health = g->player.max_health;
+    g->player.experience = 0;
+    g->player.exp_to_next_level = game_calculate_exp_requirement(g->player.level);
+    
+    // Initialize admin panel
+    g->admin.god_mode_enabled = false;
+    g->admin.admin_panel_visible = false;
+    g->admin.current_solution_index = 0;
+    g->admin.total_solutions = 1; // Will be updated when available
+    
+    printf("Player initialized: Level %u, Health %u/%u, Exp %u/%u\n", 
+           g->player.level, g->player.health, g->player.max_health,
+           g->player.experience, g->player.exp_to_next_level);
+}
+
+void game_update_player_health(struct Game *g, int health_change) {
+    if (health_change < 0) {
+        unsigned damage = (unsigned)(-health_change);
+        if (damage >= g->player.health) {
+            g->player.health = 0;
+        } else {
+            g->player.health -= damage;
+        }
+    } else {
+        g->player.health += (unsigned)health_change;
+        if (g->player.health > g->player.max_health) {
+            g->player.health = g->player.max_health;
+        }
+    }
+    
+    printf("Player health: %u/%u\n", g->player.health, g->player.max_health);
+}
+
+void game_level_up_player(struct Game *g) {
+    if (g->player.experience >= g->player.exp_to_next_level) {
+        g->player.level++;
+        g->player.experience = 0;
+        g->player.max_health = game_calculate_max_health(g->player.level);
+        g->player.health = g->player.max_health; // Full heal on level up
+        g->player.exp_to_next_level = game_calculate_exp_requirement(g->player.level);
+        
+        printf("LEVEL UP! Player is now level %u with %u health\n", 
+               g->player.level, g->player.max_health);
+    }
+}
+
+unsigned game_calculate_max_health(unsigned level) {
+    if (level >= 1000) {
+        return 9999; // GOD mode health
+    }
+    return 8 + (level * 2); // Base health + 2 per level
+}
+
+unsigned game_calculate_exp_requirement(unsigned level) {
+    return level * 5; // Simple exp curve: 5, 10, 15, 20, etc.
+}
+
+// ========== ADMIN PANEL FUNCTIONS ==========
+
+void game_toggle_admin_panel(struct Game *g) {
+    g->admin.admin_panel_visible = !g->admin.admin_panel_visible;
+    
+    if (g->admin.admin_panel_visible) {
+        printf("\n=== ADMIN PANEL ACTIVATED ===\n");
+        game_print_admin_help();
+        printf("Current Player Stats: Level %u, Health %u/%u\n", 
+               g->player.level, g->player.health, g->player.max_health);
+        printf("GOD Mode: %s\n", g->admin.god_mode_enabled ? "ENABLED" : "DISABLED");
+        printf("Current Map: %u\n", g->admin.current_solution_index);
+    } else {
+        printf("=== ADMIN PANEL DEACTIVATED ===\n");
+    }
+}
+
+void game_admin_god_mode(struct Game *g) {
+    g->admin.god_mode_enabled = !g->admin.god_mode_enabled;
+    
+    if (g->admin.god_mode_enabled) {
+        g->player.level = 1000;
+        g->player.max_health = game_calculate_max_health(g->player.level);
+        g->player.health = g->player.max_health;
+        g->player.experience = 0;
+        g->player.exp_to_next_level = game_calculate_exp_requirement(g->player.level);
+        
+        printf("🔱 GOD MODE ACTIVATED! Player level set to 1000 with 9999 health!\n");
+        face_won(g->face); // Show winning face for GOD mode
+    } else {
+        g->player.level = 1;
+        g->player.max_health = game_calculate_max_health(g->player.level);
+        g->player.health = g->player.max_health;
+        g->player.experience = 0;
+        g->player.exp_to_next_level = game_calculate_exp_requirement(g->player.level);
+        
+        printf("GOD MODE DEACTIVATED. Player reset to level 1.\n");
+        face_default(g->face);
+    }
+}
+
+void game_admin_reveal_all(struct Game *g) {
+    printf("🔍 REVEALING ALL TILES...\n");
+    board_reveal_all_tiles(g->board);
+    printf("All tiles revealed!\n");
+}
+
+bool game_admin_load_map(struct Game *g, unsigned solution_index) {
+    printf("📍 Loading map %u...\n", solution_index);
+    
+    if (board_load_solution(g->board, "latest-s-v0_0_9.json", solution_index)) {
+        g->admin.current_solution_index = solution_index;
+        
+        // Reset game state for new map
+        if (!game_reset(g)) {
+            return false;
+        }
+        
+        printf("✅ Successfully loaded map %u\n", solution_index);
+        return true;
+    } else {
+        printf("❌ Failed to load map %u\n", solution_index);
+        return false;
+    }
+}
+
+void game_print_admin_help(void) {
+    printf("Admin Panel Controls:\n");
+    printf("  F1  - Toggle Admin Panel\n");
+    printf("  F2  - Toggle GOD Mode (Level 1000)\n");
+    printf("  F3  - Reveal All Tiles\n");
+    printf("  F4  - Load Next Map\n");
+    printf("  F5  - Load Previous Map\n");
+    printf("  F12 - Print this help\n");
+}
+
+// ========== PLAYER PANEL FUNCTIONS ==========
+
+bool player_panel_new(PlayerPanel **panel, SDL_Renderer *renderer, unsigned columns, int scale) {
+    *panel = calloc(1, sizeof(PlayerPanel));
+    if (!*panel) {
+        fprintf(stderr, "Error in calloc of new player panel.\n");
+        return false;
+    }
+    PlayerPanel *p = *panel;
+
+    p->renderer = renderer;
+    p->columns = columns;
+    p->scale = scale;
+
+    player_panel_set_scale(p, p->scale);
+
+    return true;
+}
+
+void player_panel_free(PlayerPanel **panel) {
+    if (*panel) {
+        PlayerPanel *p = *panel;
+        
+        p->renderer = NULL;
+        
+        free(*panel);
+        *panel = NULL;
+        
+        printf("player panel clean.\n");
+    }
+}
+
+void player_panel_set_scale(PlayerPanel *p, int scale) {
+    p->scale = scale;
+    p->rect.x = (PIECE_SIZE * 4) * p->scale; // Position after face and clock
+    p->rect.y = PLAYER_PANEL_Y * p->scale;
+    p->rect.w = (PIECE_SIZE * 6) * p->scale; // Width for stats display
+    p->rect.h = PLAYER_PANEL_HEIGHT * p->scale;
+}
+
+void player_panel_set_size(PlayerPanel *p, unsigned columns) {
+    p->columns = columns;
+    // Adjust position based on board width
+    p->rect.x = (PIECE_SIZE * 4) * p->scale;
+}
+
+void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats) {
+    // Set drawing color to a semi-transparent dark background
+    SDL_SetRenderDrawColor(p->renderer, 40, 40, 40, 180);
+    SDL_RenderFillRect(p->renderer, &p->rect);
+    
+    // Set border color
+    SDL_SetRenderDrawColor(p->renderer, 100, 100, 100, 255);
+    SDL_RenderDrawRect(p->renderer, &p->rect);
+    
+    // For now, we'll use simple colored rectangles to represent the stats
+    // This is a placeholder - in a full implementation you'd want text rendering
+    
+    // Level indicator (green bars)
+    SDL_SetRenderDrawColor(p->renderer, 0, 255, 0, 255);
+    SDL_Rect level_rect = {
+        p->rect.x + 5 * p->scale,
+        p->rect.y + 5 * p->scale,
+        (int)(stats->level % 20) * p->scale, // Visual level indicator
+        8 * p->scale
+    };
+    SDL_RenderFillRect(p->renderer, &level_rect);
+    
+    // Health indicator (red bars)
+    SDL_SetRenderDrawColor(p->renderer, 255, 0, 0, 255);
+    int health_width = (int)((float)stats->health / stats->max_health * 60.0f * p->scale);
+    SDL_Rect health_rect = {
+        p->rect.x + 5 * p->scale,
+        p->rect.y + 15 * p->scale,
+        health_width,
+        8 * p->scale
+    };
+    SDL_RenderFillRect(p->renderer, &health_rect);
+    
+    // Experience indicator (blue bars)
+    SDL_SetRenderDrawColor(p->renderer, 0, 0, 255, 255);
+    int exp_width = (int)((float)stats->experience / stats->exp_to_next_level * 60.0f * p->scale);
+    SDL_Rect exp_rect = {
+        p->rect.x + 5 * p->scale,
+        p->rect.y + 25 * p->scale,
+        exp_width,
+        8 * p->scale
+    };
+    SDL_RenderFillRect(p->renderer, &exp_rect);
+    
+    // Reset render color to default
+    SDL_SetRenderDrawColor(p->renderer, 0, 0, 0, 255);
 }
