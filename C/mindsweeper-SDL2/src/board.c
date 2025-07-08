@@ -446,7 +446,11 @@ void board_draw(const struct Board *b) {
             TileState tile_state = b->tile_states[index];
             
             if (tile_state == TILE_HIDDEN) {
-                // Use tile sprites with random variations (indices 5-7) and rotations
+                // First render the base hidden tile (index 0) - grey tile with light grey border
+                SDL_RenderCopy(b->renderer, b->tile_sprites,
+                               &b->tile_src_rects[0], &dest_rect);
+                
+                // Then render the variation tile (indices 5-7) on top with rotation
                 unsigned tile_variation = b->tile_variations[index];
                 unsigned rotation = b->tile_rotations[index];
                 
