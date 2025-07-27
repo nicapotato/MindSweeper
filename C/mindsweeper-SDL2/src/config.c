@@ -111,6 +111,11 @@ bool config_load(GameConfig *config, const char *config_file) {
     // Parse game state
     cJSON *game_state = cJSON_GetObjectItem(json, "game_state");
     if (game_state) {
+        // Print the game_state JSON object
+        char *game_state_str = cJSON_Print(game_state);
+        printf("Game state JSON: %s\n", game_state_str);
+        free(game_state_str);
+        
         config->rows = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(json, "rows"));
         config->cols = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(json, "cols"));
         config->starting_health = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(game_state, "starting_max_health"));
@@ -118,9 +123,15 @@ bool config_load(GameConfig *config, const char *config_file) {
         config->starting_level = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(game_state, "starting_level"));
     }
     
+    
     // Parse entities
     cJSON *entities = cJSON_GetObjectItem(json, "entities");
     if (entities) {
+        // Print the entities JSON array
+        // char *entities_str = cJSON_Print(entities);
+        // printf("Entities JSON: %s\n", entities_str);
+        // free(entities_str);
+        
         config->entity_count = (unsigned)cJSON_GetArraySize(entities);
         config->entities = calloc(config->entity_count, sizeof(Entity));
         
@@ -238,6 +249,16 @@ bool config_load_solution(SolutionData *solution, const char *solution_file, uns
             solution->board[i][j] = (unsigned)cJSON_GetNumberValue(cell);
         }
     }
+    
+    // Print the solution board
+    printf("Solution board (%ux%u):\n", solution->rows, solution->cols);
+    for (unsigned i = 0; i < solution->rows; i++) {
+        for (unsigned j = 0; j < solution->cols; j++) {
+            printf("%u ", solution->board[i][j]);
+        }
+        printf("\n");
+    }
+    printf("\n");
     
     cJSON_Delete(json);
     return true;

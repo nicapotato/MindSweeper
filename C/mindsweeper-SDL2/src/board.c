@@ -42,7 +42,7 @@ bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
 
     // Load entity sprites (dragons theme)
     if (!load_media_sheet(b->renderer, &b->entity_sprites, 
-                          "images/mindsweeper-nb-16x16-dragons.png",
+                          "images/sprite-sheet-cats.png",
                           PIECE_SIZE, PIECE_SIZE, &b->entity_src_rects)) {
         fprintf(stderr, "Failed to load entity sprites\n");
         return false;
@@ -303,6 +303,8 @@ void board_start_animation(struct Board *b, unsigned row, unsigned col,
         case ANIM_REVEALING:
             anim->start_sprite = SPRITE_HIDDEN;
             anim->end_sprite = get_entity_sprite_index(entity_id, TILE_REVEALED);
+            printf("  Animation: SPRITE_HIDDEN (%u) -> Entity sprite (%u)\n", 
+                   anim->start_sprite, anim->end_sprite);
             break;
         case ANIM_COMBAT:
         case ANIM_DYING:
@@ -345,10 +347,11 @@ void board_update_animations(struct Board *b) {
                     float progress = (float)(current_time - anim->start_time) / anim->duration_ms;
                     
                     // For now, simple sprite transition (could add interpolation later)
-                    if (progress > 0.5f) {
-                        b->display_sprites[index] = anim->end_sprite;
-                    } else {
-                        b->display_sprites[index] = anim->start_sprite;
+                    unsigned new_sprite = (progress > 0.5f) ? anim->end_sprite : anim->start_sprite;
+                    if (new_sprite != b->display_sprites[index]) {
+                        printf("  Animation progress %.1f%%: sprite %u -> %u at [%u,%u]\n", 
+                               progress * 100.0f, b->display_sprites[index], new_sprite, r, c);
+                        b->display_sprites[index] = new_sprite;
                     }
                 }
             }
@@ -366,7 +369,7 @@ void board_finish_animation(struct Board *b, unsigned row, unsigned col) {
     // Clear animation
     anim->type = ANIM_NONE;
     
-    printf("Animation finished for tile [%u,%u]\n", row, col);
+    printf("Animation finished for tile [%u,%u] - Final sprite: %u\n", row, col, anim->end_sprite);
 }
 
 // Game logic
@@ -389,6 +392,13 @@ bool board_handle_click(struct Board *b, unsigned row, unsigned col) {
     if (current_state == TILE_HIDDEN) {
         // Reveal tile
         printf("Revealing tile [%u,%u] with entity %u\n", row, col, entity_id);
+        
+        // Get entity info for debug
+        Entity *entity = config_get_entity(&g_config, entity_id);
+        if (entity) {
+            printf("  Entity: %s (ID: %u, Level: %u)\n", entity->name, entity->id, entity->level);
+            printf("  Sprite position: x=%u, y=%u\n", entity->sprite_pos.x, entity->sprite_pos.y);
+        }
         
         // 1. IMMEDIATE logical state update (like JS)
         board_set_tile_state(b, row, col, TILE_REVEALED);
@@ -427,10 +437,14 @@ unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state) {
     if (entity) {
         // Convert 2D sprite position to 1D index
         // Assuming 16 sprites per row in the sprite sheet
-        return entity->sprite_pos.y * 16 + entity->sprite_pos.x;
+        unsigned sprite_index = entity->sprite_pos.y * 4 + entity->sprite_pos.x;
+        printf("    Calculating sprite index: y=%u * 4 + x=%u = %u\n", 
+               entity->sprite_pos.y, entity->sprite_pos.x, sprite_index);
+        return sprite_index;
     }
     
     // Default to cleared sprite if entity not found
+    printf("    Entity %u not found, using SPRITE_CLEARED (%u)\n", entity_id, SPRITE_CLEARED);
     return SPRITE_CLEARED;
 }
 
