@@ -479,7 +479,28 @@ void board_draw(const struct Board *b) {
                                    angle, &center, SDL_FLIP_NONE);
                 }
             } else {
-                // TILE_REVEALED: use entity sprites
+                // TILE_REVEALED: render dark grey border, light grey background, then entity sprite
+                
+                // Create border rectangle (slightly larger than tile)
+
+                SDL_Rect border_rect = dest_rect;
+                border_rect.x -= 1;
+                border_rect.y -= 1;
+                border_rect.w += 4;
+                border_rect.h += 4;
+                
+                // Render dark grey border
+                SDL_SetRenderDrawColor(b->renderer, 100, 100, 100, 255); // Dark grey
+                SDL_RenderFillRect(b->renderer, &border_rect);
+                
+                // Render light grey background (slightly smaller than border)
+                SDL_SetRenderDrawColor(b->renderer, 200, 200, 200, 255); // Light grey
+                SDL_RenderFillRect(b->renderer, &dest_rect);
+                
+                // Reset render color to default
+                SDL_SetRenderDrawColor(b->renderer, 0, 0, 0, 255);
+                
+                // Render entity sprite on top
                 unsigned sprite_index = b->display_sprites[index];
                 
                 // Ensure sprite index is valid

@@ -80,7 +80,7 @@
             "count": null,
             "tags": ["empty"],
             "sprites": {
-                "revealed": {"x": 5, "y": 4, "sprite_sheet": "new_sprites"}
+                "revealed": {"x": 3, "y": 4, "sprite_sheet": "new_sprites"}
             },
             "theme_overrides": {}
         },

@@ -43,7 +43,7 @@
 #define FACE_TOP 15
 
 // Sprite definitions for mindsweeper
-#define SPRITE_HIDDEN 0
+#define SPRITE_HIDDEN 18
 #define SPRITE_REVEALED 1
 #define SPRITE_CLEARED 2
 #define SPRITE_MAX_INDEX 255
