@@ -3,6 +3,9 @@
 
 #include "main.h"
 
+// Forward declaration to avoid circular dependency
+struct Game;
+
 // Animation types for tile transitions
 typedef enum {
     ANIM_NONE = 0,
@@ -90,7 +93,7 @@ void board_start_animation(struct Board *b, unsigned row, unsigned col,
 bool board_is_tile_animating(const struct Board *b, unsigned row, unsigned col);
 
 // Game logic
-bool board_handle_click(struct Board *b, unsigned row, unsigned col);
+bool board_handle_click(struct Game *g, unsigned row, unsigned col);
 bool board_load_solution(struct Board *b, const char *solution_file, unsigned solution_index);
 
 // Admin functions

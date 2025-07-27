@@ -243,7 +243,7 @@ bool game_mouse_up(struct Game *g, int x, int y, Uint8 button) {
         unsigned row = (unsigned)(board_y / g->board->piece_size);
         
         if (row < g->board->rows && col < g->board->columns) {
-            if (!board_handle_click(g->board, row, col)) {
+            if (!board_handle_click(g, row, col)) {
                 return false;
             }
         }
@@ -274,43 +274,43 @@ bool game_events(struct Game *g) {
                 if (!game_reset(g))
                     return false;
                 break;
-            case SDL_SCANCODE_Z:
-                game_toggle_scale(g);
-                break;
-            case SDL_SCANCODE_1:
-                game_set_theme(g, 0);
-                break;
-            case SDL_SCANCODE_2:
-                game_set_theme(g, 1);
-                break;
-            case SDL_SCANCODE_Q:
-                if (!game_set_size(g, 9, 9, 2, "Tiny"))
-                    return false;
-                break;
-            case SDL_SCANCODE_W:
-                if (!game_set_size(g, 16, 16, 2, "Small"))
-                    return false;
-                break;
+            // case SDL_SCANCODE_Z:
+            //     game_toggle_scale(g);
+            //     break;
+            // case SDL_SCANCODE_1:
+            //     game_set_theme(g, 0);
+            //     break;
+            // case SDL_SCANCODE_2:
+            //     game_set_theme(g, 1);
+            //     break;
+            // case SDL_SCANCODE_Q:
+            //     if (!game_set_size(g, 9, 9, 2, "Tiny"))
+            //         return false;
+            //     break;
+            // case SDL_SCANCODE_W:
+            //     if (!game_set_size(g, 16, 16, 2, "Small"))
+            //         return false;
+            //     break;
             case SDL_SCANCODE_E:
                 if (!game_set_size(g, 16, 30, 2, "Medium"))
                     return false;
                 break;
-            case SDL_SCANCODE_R:
-                if (!game_set_size(g, 20, 40, 2, "Large"))
-                    return false;
-                break;
-            case SDL_SCANCODE_T:
-                if (!game_set_size(g, 40, 80, 1, "Huge"))
-                    return false;
-                break;
+            // case SDL_SCANCODE_R:
+            //     if (!game_set_size(g, 20, 40, 2, "Large"))
+            //         return false;
+            //     break;
+            // case SDL_SCANCODE_T:
+            //     if (!game_set_size(g, 40, 80, 1, "Huge"))
+            //         return false;
+            //     break;
             // Admin Panel Controls
-            case SDL_SCANCODE_F1:
+            case SDL_SCANCODE_P:
                 game_toggle_admin_panel(g);
                 break;
-            case SDL_SCANCODE_F2:
+            case SDL_SCANCODE_G:
                 game_admin_god_mode(g);
                 break;
-            case SDL_SCANCODE_F3:
+            case SDL_SCANCODE_R:
                 game_admin_reveal_all(g);
                 break;
             case SDL_SCANCODE_F4:
