@@ -1,5 +1,6 @@
 #include "game.h"
 #include "init_sdl.h"
+#include "board_click.h"
 
 #ifdef WASM_BUILD
 // Global game pointer for Emscripten main loop
