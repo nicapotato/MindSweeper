@@ -559,20 +559,15 @@ void board_draw(const struct Board *b) {
                     
                     // Only render threat level if > 0
                     if (threat_level > 0) {
-                        // Render threat level number (clamp to 0-9)
-                        unsigned display_level = (threat_level > 9) ? 9 : threat_level;
+                        // Display the actual threat level (no longer clamped to 0-9)
+                        unsigned display_level = threat_level;
                         
                         // Convert to string
-                        char threat_text[2];
+                        char threat_text[16];  // Increased buffer size to handle larger numbers
                         snprintf(threat_text, sizeof(threat_text), "%u", display_level);
                         
-                        // Calculate text position (centered in tile)
-                        int text_x = dest_rect.x + (b->piece_size / 2) - (6 * b->scale);  // Approximate center
-                        int text_y = dest_rect.y + (b->piece_size / 2) - (6 * b->scale);  // Approximate center
-                        
-                        // Render the threat level text
-                        SDL_Color black = {0, 0, 0, 255};
-                        board_draw_threat_level_text(b, threat_text, text_x, text_y, black);
+                        // Render the threat level text (centered in tile) - red with black outline
+                        board_draw_threat_level_text_centered(b, threat_text, dest_rect);
                     }
                 } else {
                     // Render entity sprite for non-empty tiles
@@ -618,6 +613,75 @@ void board_draw_threat_level_text(const struct Board *b, const char *text, int x
     SDL_FreeSurface(text_surface);
 }
 
+void board_draw_threat_level_text_centered(const struct Board *b, const char *text, SDL_Rect tile_rect) {
+    if (!b->threat_font || !text) {
+        return;
+    }
+    
+    // Colors for outline effect
+    SDL_Color black = {0, 0, 0, 255};    // Outline color
+    SDL_Color red = {220, 20, 20, 255};  // Main text color
+    
+    // Create text surfaces
+    SDL_Surface *outline_surface = TTF_RenderText_Solid(b->threat_font, text, black);
+    SDL_Surface *main_surface = TTF_RenderText_Solid(b->threat_font, text, red);
+    
+    if (!outline_surface || !main_surface) {
+        if (outline_surface) SDL_FreeSurface(outline_surface);
+        if (main_surface) SDL_FreeSurface(main_surface);
+        return;
+    }
+    
+    // Create textures
+    SDL_Texture *outline_texture = SDL_CreateTextureFromSurface(b->renderer, outline_surface);
+    SDL_Texture *main_texture = SDL_CreateTextureFromSurface(b->renderer, main_surface);
+    
+    if (!outline_texture || !main_texture) {
+        if (outline_texture) SDL_DestroyTexture(outline_texture);
+        if (main_texture) SDL_DestroyTexture(main_texture);
+        SDL_FreeSurface(outline_surface);
+        SDL_FreeSurface(main_surface);
+        return;
+    }
+    
+    // Calculate centered position within the tile
+    int text_x = tile_rect.x + (tile_rect.w - main_surface->w) / 2;
+    int text_y = tile_rect.y + (tile_rect.h - main_surface->h) / 2;
+    
+    // Outline offset positions (8-directional outline)
+    int outline_offsets[][2] = {
+        {-1, -1}, {0, -1}, {1, -1},  // Top row
+        {-1,  0},          {1,  0},  // Middle row (skip center)
+        {-1,  1}, {0,  1}, {1,  1}   // Bottom row
+    };
+    
+    // Draw black outline in all 8 directions
+    for (int i = 0; i < 8; i++) {
+        SDL_Rect outline_rect = {
+            text_x + outline_offsets[i][0],
+            text_y + outline_offsets[i][1],
+            outline_surface->w,
+            outline_surface->h
+        };
+        SDL_RenderCopy(b->renderer, outline_texture, NULL, &outline_rect);
+    }
+    
+    // Draw main red text on top
+    SDL_Rect main_rect = {
+        text_x,
+        text_y,
+        main_surface->w,
+        main_surface->h
+    };
+    SDL_RenderCopy(b->renderer, main_texture, NULL, &main_rect);
+    
+    // Cleanup
+    SDL_DestroyTexture(outline_texture);
+    SDL_DestroyTexture(main_texture);
+    SDL_FreeSurface(outline_surface);
+    SDL_FreeSurface(main_surface);
+}
+
 void board_calculate_threat_levels(struct Board *b) {
     if (!b || !b->threat_levels) {
         return;
@@ -629,7 +693,7 @@ void board_calculate_threat_levels(struct Board *b) {
         b->threat_levels[i] = 0;
     }
     
-    // Calculate threat level for each tile
+
     for (unsigned row = 0; row < b->rows; row++) {
         for (unsigned col = 0; col < b->columns; col++) {
             size_t index = (size_t)(row * b->columns + col);

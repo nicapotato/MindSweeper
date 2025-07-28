@@ -131,5 +131,7 @@ const GameConfig* board_get_config(void);
 // Threat level system (minesweeper logic)
 void board_calculate_threat_levels(struct Board *b);
 unsigned board_get_threat_level(const struct Board *b, unsigned row, unsigned col);
+void board_draw_threat_level_text(const struct Board *b, const char *text, int x, int y, SDL_Color color);
+void board_draw_threat_level_text_centered(const struct Board *b, const char *text, SDL_Rect tile_rect);
 
 #endif
