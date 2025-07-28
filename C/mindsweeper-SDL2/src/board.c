@@ -10,6 +10,7 @@ bool board_calloc_arrays(struct Board *b);
 void board_free_arrays(struct Board *b);
 void board_finish_animation(struct Board *b, unsigned row, unsigned col);
 unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state);
+void board_draw_threat_level_text(const struct Board *b, const char *text, int x, int y, SDL_Color color);
 
 bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
                unsigned columns, int scale) {
@@ -62,6 +63,13 @@ bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
         return false;
     }
 
+    // Load TTF font for threat level display
+    b->threat_font = TTF_OpenFont("images/m6x11.ttf", 12 * b->scale);
+    if (!b->threat_font) {
+        fprintf(stderr, "Failed to load TTF font for threat levels: %s\n", TTF_GetError());
+        return false;
+    }
+
     board_set_scale(b, b->scale);
 
     if (!board_reset(b)) {
@@ -98,6 +106,11 @@ void board_free(struct Board **board) {
     if (b->tile_sprites) {
         SDL_DestroyTexture(b->tile_sprites);
         b->tile_sprites = NULL;
+    }
+
+    if (b->threat_font) {
+        TTF_CloseFont(b->threat_font);
+        b->threat_font = NULL;
     }
 
     b->renderer = NULL;
@@ -148,6 +161,11 @@ bool board_calloc_arrays(struct Board *b) {
         goto cleanup_failure;
     }
 
+    b->threat_levels = calloc(total_tiles, sizeof(unsigned));
+    if (!b->threat_levels) {
+        goto cleanup_failure;
+    }
+
     return true;
 
 cleanup_failure:
@@ -181,6 +199,10 @@ void board_free_arrays(struct Board *b) {
         free(b->tile_rotations);
         b->tile_rotations = NULL;
     }
+    if (b->threat_levels) {
+        free(b->threat_levels);
+        b->threat_levels = NULL;
+    }
 }
 
 bool board_reset(struct Board *b) {
@@ -202,6 +224,9 @@ bool board_reset(struct Board *b) {
         b->tile_variations[i] = (unsigned)(MIN_TILE_VARIATION + (rand() % (MAX_TILE_VARIATION - MIN_TILE_VARIATION + 1)));
         b->tile_rotations[i] = (unsigned)(rand() % NUM_TILE_ROTATIONS);          // Random rotation 0-3 (0°, 90°, 180°, 270°)
     }
+
+    // Calculate initial threat levels
+    board_calculate_threat_levels(b);
 
     return true;
 }
@@ -234,6 +259,9 @@ bool board_load_solution(struct Board *b, const char *solution_file, unsigned so
             board_set_tile_state(b, r, c, TILE_HIDDEN);
         }
     }
+    
+    // Calculate threat levels for the loaded solution
+    board_calculate_threat_levels(b);
     
     config_free_solution(&solution);
     return true;
@@ -275,6 +303,9 @@ void board_set_entity_id(struct Board *b, unsigned row, unsigned col, unsigned e
     }
     size_t index = (size_t)(row * b->columns + col);
     b->entity_ids[index] = entity_id;
+    
+    // Recalculate threat levels since entity change affects neighbors
+    board_calculate_threat_levels(b);
 }
 
 TileState board_get_tile_state(const struct Board *b, unsigned row, unsigned col) {
@@ -296,6 +327,11 @@ void board_set_tile_state(struct Board *b, unsigned row, unsigned col, TileState
     if (b->animations[index].type == ANIM_NONE) {
         unsigned entity_id = b->entity_ids[index];
         b->display_sprites[index] = get_entity_sprite_index(entity_id, state);
+    }
+    
+    // Recalculate threat levels when tile is revealed
+    if (state == TILE_REVEALED) {
+        board_calculate_threat_levels(b);
     }
 }
 
@@ -338,6 +374,9 @@ void board_start_animation(struct Board *b, unsigned row, unsigned col,
             break;
         case ANIM_DYING:
         case ANIM_TREASURE_CLAIM:
+            anim->start_sprite = get_entity_sprite_index(entity_id, tile_state);
+            anim->end_sprite = get_entity_sprite_index(entity_id, tile_state);
+            break;
         case ANIM_ENTITY_TRANSITION: {
             // Show the new entity that we're transitioning to
             unsigned new_entity_id = b->entity_ids[index];
@@ -417,6 +456,14 @@ void board_finish_animation(struct Board *b, unsigned row, unsigned col) {
             // No transition, just clear animation
             anim->type = ANIM_NONE;
         }
+        return;
+    } else if (anim->type == ANIM_TREASURE_CLAIM) {
+        // Treasure claim finished, transition to empty tile
+        printf("Treasure claim finished, transitioning to empty tile at [%u,%u]\n", row, col);
+        
+        // Transition treasure to empty tile (entity ID 0)
+        board_set_entity_id(b, row, col, 0);
+        board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false);
         return;
     }
     
@@ -502,17 +549,132 @@ void board_draw(const struct Board *b) {
                 // Reset render color to default
                 SDL_SetRenderDrawColor(b->renderer, 0, 0, 0, 255);
                 
-                // Render entity sprite on top
+                // Render entity sprite on top or threat level for empty tiles
                 unsigned sprite_index = b->display_sprites[index];
+                unsigned entity_id = b->entity_ids[index];
                 
-                // Ensure sprite index is valid
-                if (sprite_index < 256) { // Assuming max 256 sprites in sheet
-                    SDL_RenderCopy(b->renderer, b->entity_sprites,
-                                   &b->entity_src_rects[sprite_index], &dest_rect);
+                // If this is an empty tile (entity_id == 0), render threat level
+                if (entity_id == 0) {
+                    unsigned threat_level = b->threat_levels[index];
+                    
+                    // Only render threat level if > 0
+                    if (threat_level > 0) {
+                        // Render threat level number (clamp to 0-9)
+                        unsigned display_level = (threat_level > 9) ? 9 : threat_level;
+                        
+                        // Convert to string
+                        char threat_text[2];
+                        snprintf(threat_text, sizeof(threat_text), "%u", display_level);
+                        
+                        // Calculate text position (centered in tile)
+                        int text_x = dest_rect.x + (b->piece_size / 2) - (6 * b->scale);  // Approximate center
+                        int text_y = dest_rect.y + (b->piece_size / 2) - (6 * b->scale);  // Approximate center
+                        
+                        // Render the threat level text
+                        SDL_Color black = {0, 0, 0, 255};
+                        board_draw_threat_level_text(b, threat_text, text_x, text_y, black);
+                    }
+                } else {
+                    // Render entity sprite for non-empty tiles
+                    // Ensure sprite index is valid
+                    if (sprite_index < 256) { // Assuming max 256 sprites in sheet
+                        SDL_RenderCopy(b->renderer, b->entity_sprites,
+                                       &b->entity_src_rects[sprite_index], &dest_rect);
+                    }
                 }
             }
         }
     }
+}
+
+// ========== THREAT LEVEL FUNCTIONS ==========
+
+void board_draw_threat_level_text(const struct Board *b, const char *text, int x, int y, SDL_Color color) {
+    if (!b->threat_font || !text) {
+        return;
+    }
+    
+    SDL_Surface *text_surface = TTF_RenderText_Solid(b->threat_font, text, color);
+    if (!text_surface) {
+        return;
+    }
+    
+    SDL_Texture *text_texture = SDL_CreateTextureFromSurface(b->renderer, text_surface);
+    if (!text_texture) {
+        SDL_FreeSurface(text_surface);
+        return;
+    }
+    
+    SDL_Rect dest_rect = {
+        x,
+        y,
+        text_surface->w,
+        text_surface->h
+    };
+    
+    SDL_RenderCopy(b->renderer, text_texture, NULL, &dest_rect);
+    
+    SDL_DestroyTexture(text_texture);
+    SDL_FreeSurface(text_surface);
+}
+
+void board_calculate_threat_levels(struct Board *b) {
+    if (!b || !b->threat_levels) {
+        return;
+    }
+    
+    // Clear all threat levels first
+    size_t total_tiles = (size_t)(b->rows * b->columns);
+    for (size_t i = 0; i < total_tiles; i++) {
+        b->threat_levels[i] = 0;
+    }
+    
+    // Calculate threat level for each tile
+    for (unsigned row = 0; row < b->rows; row++) {
+        for (unsigned col = 0; col < b->columns; col++) {
+            size_t index = (size_t)(row * b->columns + col);
+            
+            // Only calculate threat level for empty tiles (entity_id == 0)
+            if (b->entity_ids[index] == 0) {
+                unsigned threat_level = 0;
+                
+                // Check all 8 neighboring positions
+                for (int dr = -1; dr <= 1; dr++) {
+                    for (int dc = -1; dc <= 1; dc++) {
+                        // Skip the center tile (self)
+                        if (dr == 0 && dc == 0) continue;
+                        
+                        int neighbor_row = (int)row + dr;
+                        int neighbor_col = (int)col + dc;
+                        
+                        // Check if neighbor is within bounds
+                        if (neighbor_row >= 0 && neighbor_row < (int)b->rows &&
+                            neighbor_col >= 0 && neighbor_col < (int)b->columns) {
+                            
+                            unsigned neighbor_entity_id = board_get_entity_id(b, (unsigned)neighbor_row, (unsigned)neighbor_col);
+                            
+                            // Get entity level and add to threat
+                            Entity *entity = config_get_entity(&g_config, neighbor_entity_id);
+                            if (entity) {
+                                threat_level += entity->level;
+                            }
+                        }
+                    }
+                }
+                
+                b->threat_levels[index] = threat_level;
+            }
+        }
+    }
+}
+
+unsigned board_get_threat_level(const struct Board *b, unsigned row, unsigned col) {
+    if (!b || !b->threat_levels || row >= b->rows || col >= b->columns) {
+        return 0;
+    }
+    
+    size_t index = (size_t)(row * b->columns + col);
+    return b->threat_levels[index];
 }
 
 // ========== ADMIN FUNCTIONS ==========

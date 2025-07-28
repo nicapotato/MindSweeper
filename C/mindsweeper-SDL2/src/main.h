@@ -17,10 +17,10 @@
 #define IMG_FLAGS IMG_INIT_PNG
 
 #define WINDOW_TITLE "MindSweeper"
-#define WINDOW_WIDTH 480   // Slightly reduced width for better formatting
-#define WINDOW_HEIGHT 460  // Increased height for better panel spacing
+#define WINDOW_WIDTH 1200  // Reduced from 1440 to 1200 for better fit
+#define WINDOW_HEIGHT 920  // Keep height the same for player panel visibility
 
-#define PIECE_SIZE 16
+#define PIECE_SIZE 16    // Back to original sprite size
 #define BORDER_HEIGHT 55
 #define BORDER_LEFT 4
 #define BORDER_RIGHT 8
@@ -53,9 +53,12 @@
 #define SPRITE_MAX_INDEX 255
 
 // Game configuration constants
-#define DEFAULT_BOARD_ROWS 10
-#define DEFAULT_BOARD_COLS 14
-#define DEFAULT_SCALE 2
+#define DEFAULT_BOARD_ROWS 10    // Back to original
+#define DEFAULT_BOARD_COLS 14    // Back to original  
+// DEFAULT_SCALE removed - will be calculated dynamically
+
+// Function to calculate optimal scale based on window dimensions
+int calculate_optimal_scale(int window_width, int window_height, int board_rows, int board_cols);
 
 // Animation constants
 #define ANIM_REVEALING_DURATION_MS 800

@@ -55,7 +55,9 @@ bool game_new(struct Game **game) {
     g->game_over_info.death_cause[0] = '\0'; // Empty death cause string
     g->rows = DEFAULT_BOARD_ROWS;      // Use constant instead of magic number
     g->columns = DEFAULT_BOARD_COLS;   // Use constant instead of magic number
-    g->scale = DEFAULT_SCALE;          // Use constant instead of magic number
+    
+    // Calculate optimal scale based on window dimensions
+    g->scale = calculate_optimal_scale(WINDOW_WIDTH, WINDOW_HEIGHT, g->rows, g->columns);
 
     if (!game_init_sdl(g)) {
         goto cleanup_failure;
@@ -104,6 +106,9 @@ bool game_new(struct Game **game) {
     
     // Initialize player stats and admin panel
     game_init_player_stats(g);
+    
+    // Initialize screen system
+    game_init_screen_system(g);
 
     return true;
 
@@ -126,6 +131,12 @@ void game_free(struct Game **game) {
         if (g->size_str) {
             free(g->size_str);
             g->size_str = NULL;
+        }
+        
+        // Clean up screen system resources
+        if (g->info_font) {
+            TTF_CloseFont(g->info_font);
+            g->info_font = NULL;
         }
 
         if (g->renderer) {
@@ -218,6 +229,15 @@ void game_set_scale(struct Game *g) {
     clock_set_scale(g->clock, g->scale);
     face_set_scale(g->face, g->scale);
     player_panel_set_scale(g->player_panel, g->scale);
+    
+    // Update screen button positions for new scale
+    game_setup_screen_buttons(g);
+    
+    // Update info font size
+    if (g->info_font) {
+        TTF_CloseFont(g->info_font);
+        g->info_font = TTF_OpenFont("images/m6x11.ttf", 14 * g->scale);
+    }
 }
 
 void game_toggle_scale(struct Game *g) {
@@ -269,6 +289,11 @@ void game_mouse_down(struct Game *g, int x, int y, Uint8 button) {
 
 bool game_mouse_up(struct Game *g, int x, int y, Uint8 button) {
     (void)button;
+    
+    // Only handle game interactions on the main game screen
+    if (g->current_screen != SCREEN_GAME) {
+        return true;
+    }
     
     // Ignore board interactions during game over
     if (g->game_over_info.is_game_over) {
@@ -343,10 +368,10 @@ bool game_events(struct Game *g) {
             //     if (!game_set_size(g, 16, 16, 2, "Small"))
             //         return false;
             //     break;
-            case SDL_SCANCODE_E:
-                if (!game_set_size(g, 16, 30, 2, "Medium"))
-                    return false;
-                break;
+            // case SDL_SCANCODE_E:
+            //     if (!game_set_size(g, 16, 30, 2, "Medium"))
+            //         return false;
+            //     break;
             // case SDL_SCANCODE_R:
             //     if (!game_set_size(g, 20, 40, 2, "Large"))
             //         return false;
@@ -382,6 +407,27 @@ bool game_events(struct Game *g) {
             case SDL_SCANCODE_F12:
                 game_print_admin_help();
                 break;
+            // Screen navigation keys
+            case SDL_SCANCODE_H:
+                // Toggle How to Play screen
+                if (g->current_screen == SCREEN_HOW_TO_PLAY) {
+                    game_set_screen(g, SCREEN_GAME);
+                } else {
+                    game_set_screen(g, SCREEN_HOW_TO_PLAY);
+                }
+                break;
+            case SDL_SCANCODE_E:
+                // Toggle Entities screen  
+                if (g->current_screen == SCREEN_ENTITIES) {
+                    game_set_screen(g, SCREEN_GAME);
+                } else {
+                    game_set_screen(g, SCREEN_ENTITIES);
+                }
+                break;
+            case SDL_SCANCODE_ESCAPE:
+                // Always return to main game screen
+                game_set_screen(g, SCREEN_GAME);
+                break;
             default:
                 break;
             }
@@ -408,11 +454,46 @@ void game_update(struct Game *g) {
 void game_draw(const struct Game *g) {
     SDL_RenderClear(g->renderer);
 
-    board_draw(g->board);
-    player_panel_draw(g->player_panel, &g->player);
-
-    // Draw game over popup if needed
-    game_draw_game_over_popup(g);
+    // Draw based on current screen state
+    switch (g->current_screen) {
+        case SCREEN_GAME:
+            board_draw(g->board);
+            player_panel_draw(g->player_panel, &g->player);
+            
+            // Draw keyboard shortcuts hint
+            if (g->info_font) {
+                SDL_Color grey = {150, 150, 150, 255};
+                const char *hint = "Press H for Help, E for Entities";
+                
+                SDL_Surface *hint_surface = TTF_RenderText_Solid(g->info_font, hint, grey);
+                if (hint_surface) {
+                    SDL_Texture *hint_texture = SDL_CreateTextureFromSurface(g->renderer, hint_surface);
+                    if (hint_texture) {
+                        SDL_Rect hint_rect = {
+                            (WINDOW_WIDTH * g->scale) - hint_surface->w - (5 * g->scale),
+                            (WINDOW_HEIGHT * g->scale) - hint_surface->h - (5 * g->scale),
+                            hint_surface->w,
+                            hint_surface->h
+                        };
+                        SDL_RenderCopy(g->renderer, hint_texture, NULL, &hint_rect);
+                        SDL_DestroyTexture(hint_texture);
+                    }
+                    SDL_FreeSurface(hint_surface);
+                }
+            }
+            
+            // Draw game over popup if needed
+            game_draw_game_over_popup(g);
+            break;
+            
+        case SCREEN_ENTITIES:
+            game_draw_entities_screen(g);
+            break;
+            
+        case SCREEN_HOW_TO_PLAY:
+            game_draw_howto_screen(g);
+            break;
+    }
 
     SDL_RenderPresent(g->renderer);
 }
@@ -442,6 +523,35 @@ bool game_run(struct Game *g) {
 
     return true;
 #endif
+}
+
+// ========== DYNAMIC SCALING FUNCTIONS ==========
+
+int calculate_optimal_scale(int window_width, int window_height, int board_rows, int board_cols) {
+    // Reserve space for UI elements
+    int ui_margin = 50;  // General margins
+    int player_panel_height = PLAYER_PANEL_HEIGHT + 20; // Player panel + spacing
+    int border_space = 20; // Additional border space
+    
+    // Calculate available space for the game board
+    int available_width = window_width - (ui_margin * 2) - border_space;
+    int available_height = window_height - player_panel_height - (ui_margin * 2) - border_space;
+    
+    // Calculate scale that fits both width and height
+    int max_scale_width = available_width / (board_cols * PIECE_SIZE);
+    int max_scale_height = available_height / (board_rows * PIECE_SIZE);
+    
+    // Use the smaller scale to ensure everything fits
+    int optimal_scale = (max_scale_width < max_scale_height) ? max_scale_width : max_scale_height;
+    
+    // Ensure minimum scale of 1 and reasonable maximum
+    if (optimal_scale < 1) optimal_scale = 1;
+    if (optimal_scale > 8) optimal_scale = 8;  // Cap at 8x for performance
+    
+    printf("Window: %dx%d, Available: %dx%d, Calculated scale: %d\n", 
+           window_width, window_height, available_width, available_height, optimal_scale);
+    
+    return optimal_scale;
 }
 
 // ========== PLAYER STATS FUNCTIONS ==========
@@ -489,15 +599,19 @@ void game_update_player_health(struct Game *g, int health_change) {
 }
 
 void game_level_up_player(struct Game *g) {
-    if (g->player.experience >= g->player.exp_to_next_level) {
+    // Handle multiple level-ups if player has gained enough experience
+    while (g->player.experience >= g->player.exp_to_next_level) {
+        // Calculate excess experience that carries over to next level
+        unsigned excess_exp = g->player.experience - g->player.exp_to_next_level;
+        
         g->player.level++;
-        g->player.experience = 0;
+        g->player.experience = excess_exp;  // Carry over excess experience
         g->player.max_health = game_calculate_max_health(g->player.level);
         g->player.health = g->player.max_health; // Full heal on level up
         g->player.exp_to_next_level = game_calculate_exp_requirement(g->player.level);
         
-        printf("LEVEL UP! Player is now level %u with %u health\n", 
-               g->player.level, g->player.max_health);
+        printf("LEVEL UP! Player is now level %u with %u health (excess exp: %u)\n", 
+               g->player.level, g->player.max_health, excess_exp);
     }
 }
 
@@ -770,8 +884,14 @@ void player_panel_free(PlayerPanel **panel) {
 void player_panel_set_scale(PlayerPanel *p, int scale) {
     p->scale = scale;
     p->rect.x = (PIECE_SIZE - BORDER_LEFT) * p->scale; // Align with game board
-    p->rect.y = (GAME_BOARD_Y + (PIECE_SIZE * 10) + 10) * p->scale; // Below game board
-    p->rect.w = (PIECE_SIZE * 14) * p->scale; // Full width of game board
+    
+    // Position panel below the actual board height (using DEFAULT_BOARD_ROWS instead of hardcoded 10)
+    p->rect.y = (GAME_BOARD_Y + (PIECE_SIZE * DEFAULT_BOARD_ROWS) + 10) * p->scale; // Below game board
+    
+    // Calculate panel width based on board columns, but cap it for reasonable UI
+    int max_panel_columns = 30; // Reasonable maximum width
+    int effective_columns = (p->columns > max_panel_columns) ? max_panel_columns : p->columns;
+    p->rect.w = (PIECE_SIZE * effective_columns) * p->scale;
     p->rect.h = PLAYER_PANEL_HEIGHT * p->scale;
     
     // Set up level-up button position (left side)
@@ -902,7 +1022,12 @@ void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats) {
     SDL_RenderFillRect(p->renderer, &exp_bg);
     
     // Experience progress (bright blue)
-    int exp_width = (int)((float)stats->experience / stats->exp_to_next_level * 100.0f * p->scale);
+    // Calculate experience percentage, but clamp to 100% for visual bar
+    float exp_percentage = (float)stats->experience / stats->exp_to_next_level;
+    if (exp_percentage > 1.0f) {
+        exp_percentage = 1.0f;  // Cap visual bar at 100%
+    }
+    int exp_width = (int)(exp_percentage * 100.0f * p->scale);
     SDL_Rect exp_progress = {
         health_start_x,
         p->level_up_button.y + 20 * p->scale,
@@ -972,4 +1097,392 @@ bool player_panel_handle_click(PlayerPanel *p, int x, int y, struct Game *g) {
     }
     
     return false;
+}
+
+// ========== SCREEN SYSTEM FUNCTIONS ==========
+
+void game_init_screen_system(struct Game *g) {
+    g->current_screen = SCREEN_GAME;
+    
+    // Load font for information screens
+    g->info_font = TTF_OpenFont("images/m6x11.ttf", 14 * g->scale);
+    if (!g->info_font) {
+        fprintf(stderr, "Failed to load info font: %s\n", TTF_GetError());
+        // Continue without font - fallback will be handled in drawing
+    }
+    
+    game_setup_screen_buttons(g);
+}
+
+void game_set_screen(struct Game *g, UIScreenState screen) {
+    g->current_screen = screen;
+    printf("Switched to screen: %d\n", screen);
+}
+
+void game_setup_screen_buttons(struct Game *g) {
+    int window_width = WINDOW_WIDTH * g->scale;
+    int window_height = WINDOW_HEIGHT * g->scale;
+    
+    int button_width = 80 * g->scale;
+    int button_height = 25 * g->scale;
+    int button_margin = 5 * g->scale;
+    
+    // Position buttons in bottom right corner
+    g->screen_buttons.entities_button = (SDL_Rect){
+        window_width - button_width - button_margin,
+        window_height - (button_height * 2) - (button_margin * 3),
+        button_width,
+        button_height
+    };
+    
+    g->screen_buttons.howto_button = (SDL_Rect){
+        window_width - button_width - button_margin,
+        window_height - button_height - button_margin,
+        button_width,
+        button_height
+    };
+    
+    // Back button (shown on info screens)
+    g->screen_buttons.back_button = (SDL_Rect){
+        button_margin,
+        button_margin,
+        button_width,
+        button_height
+    };
+}
+
+bool game_handle_screen_button_click(struct Game *g, int x, int y) {
+    // Check back button (only visible on info screens)
+    if (g->current_screen != SCREEN_GAME) {
+        if (x >= g->screen_buttons.back_button.x && 
+            x < g->screen_buttons.back_button.x + g->screen_buttons.back_button.w &&
+            y >= g->screen_buttons.back_button.y && 
+            y < g->screen_buttons.back_button.y + g->screen_buttons.back_button.h) {
+            game_set_screen(g, SCREEN_GAME);
+            return true;
+        }
+    }
+    
+    // Check screen toggle buttons (only visible on main game screen)
+    if (g->current_screen == SCREEN_GAME) {
+        // Entities button
+        if (x >= g->screen_buttons.entities_button.x && 
+            x < g->screen_buttons.entities_button.x + g->screen_buttons.entities_button.w &&
+            y >= g->screen_buttons.entities_button.y && 
+            y < g->screen_buttons.entities_button.y + g->screen_buttons.entities_button.h) {
+            game_set_screen(g, SCREEN_ENTITIES);
+            return true;
+        }
+        
+        // How to Play button
+        if (x >= g->screen_buttons.howto_button.x && 
+            x < g->screen_buttons.howto_button.x + g->screen_buttons.howto_button.w &&
+            y >= g->screen_buttons.howto_button.y && 
+            y < g->screen_buttons.howto_button.y + g->screen_buttons.howto_button.h) {
+            game_set_screen(g, SCREEN_HOW_TO_PLAY);
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+void game_draw_screen_buttons(const struct Game *g) {
+    if (g->current_screen == SCREEN_GAME) {
+        // Draw Entities button
+        SDL_SetRenderDrawColor(g->renderer, 100, 150, 200, 255); // Light blue
+        SDL_RenderFillRect(g->renderer, &g->screen_buttons.entities_button);
+        SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255);
+        SDL_RenderDrawRect(g->renderer, &g->screen_buttons.entities_button);
+        
+        // Draw How to Play button
+        SDL_SetRenderDrawColor(g->renderer, 100, 200, 150, 255); // Light green
+        SDL_RenderFillRect(g->renderer, &g->screen_buttons.howto_button);
+        SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255);
+        SDL_RenderDrawRect(g->renderer, &g->screen_buttons.howto_button);
+        
+        // Add button text if font is available
+        if (g->info_font) {
+            SDL_Color black = {0, 0, 0, 255};
+            
+            // Entities button text
+            SDL_Surface *entities_surface = TTF_RenderText_Solid(g->info_font, "Entities", black);
+            if (entities_surface) {
+                SDL_Texture *entities_texture = SDL_CreateTextureFromSurface(g->renderer, entities_surface);
+                if (entities_texture) {
+                    SDL_Rect text_rect = {
+                        g->screen_buttons.entities_button.x + 10 * g->scale,
+                        g->screen_buttons.entities_button.y + 5 * g->scale,
+                        entities_surface->w,
+                        entities_surface->h
+                    };
+                    SDL_RenderCopy(g->renderer, entities_texture, NULL, &text_rect);
+                    SDL_DestroyTexture(entities_texture);
+                }
+                SDL_FreeSurface(entities_surface);
+            }
+            
+            // How to Play button text
+            SDL_Surface *howto_surface = TTF_RenderText_Solid(g->info_font, "How to Play", black);
+            if (howto_surface) {
+                SDL_Texture *howto_texture = SDL_CreateTextureFromSurface(g->renderer, howto_surface);
+                if (howto_texture) {
+                    SDL_Rect text_rect = {
+                        g->screen_buttons.howto_button.x + 5 * g->scale,
+                        g->screen_buttons.howto_button.y + 5 * g->scale,
+                        howto_surface->w,
+                        howto_surface->h
+                    };
+                    SDL_RenderCopy(g->renderer, howto_texture, NULL, &text_rect);
+                    SDL_DestroyTexture(howto_texture);
+                }
+                SDL_FreeSurface(howto_surface);
+            }
+        }
+    } else {
+        // Draw Back button on info screens
+        SDL_SetRenderDrawColor(g->renderer, 200, 100, 100, 255); // Light red
+        SDL_RenderFillRect(g->renderer, &g->screen_buttons.back_button);
+        SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255);
+        SDL_RenderDrawRect(g->renderer, &g->screen_buttons.back_button);
+        
+        // Back button text
+        if (g->info_font) {
+            SDL_Color black = {0, 0, 0, 255};
+            SDL_Surface *back_surface = TTF_RenderText_Solid(g->info_font, "Back", black);
+            if (back_surface) {
+                SDL_Texture *back_texture = SDL_CreateTextureFromSurface(g->renderer, back_surface);
+                if (back_texture) {
+                    SDL_Rect text_rect = {
+                        g->screen_buttons.back_button.x + 20 * g->scale,
+                        g->screen_buttons.back_button.y + 5 * g->scale,
+                        back_surface->w,
+                        back_surface->h
+                    };
+                    SDL_RenderCopy(g->renderer, back_texture, NULL, &text_rect);
+                    SDL_DestroyTexture(back_texture);
+                }
+                SDL_FreeSurface(back_surface);
+            }
+        }
+    }
+}
+
+void game_draw_entities_screen(const struct Game *g) {
+    // Draw dark background
+    SDL_SetRenderDrawColor(g->renderer, 30, 30, 30, 255);
+    SDL_Rect screen = {0, 0, WINDOW_WIDTH * g->scale, WINDOW_HEIGHT * g->scale};
+    SDL_RenderFillRect(g->renderer, &screen);
+    
+    if (!g->info_font) {
+        return; // Can't draw text without font
+    }
+    
+    const GameConfig *config = board_get_config();
+    if (!config || config->entity_count == 0) {
+        return;
+    }
+    
+    SDL_Color white = {255, 255, 255, 255};
+    SDL_Color yellow = {255, 255, 0, 255};
+    SDL_Color red = {255, 100, 100, 255};
+    SDL_Color green = {100, 255, 100, 255};
+    SDL_Color cyan = {100, 255, 255, 255};
+    
+    int start_x = 20 * g->scale;
+    int start_y = 50 * g->scale;
+    int line_height = 18 * g->scale;
+    int current_y = start_y;
+    
+    // Title
+    SDL_Surface *title_surface = TTF_RenderText_Solid(g->info_font, "ENTITIES", yellow);
+    if (title_surface) {
+        SDL_Texture *title_texture = SDL_CreateTextureFromSurface(g->renderer, title_surface);
+        if (title_texture) {
+            SDL_Rect title_rect = {start_x, 20 * g->scale, title_surface->w, title_surface->h};
+            SDL_RenderCopy(g->renderer, title_texture, NULL, &title_rect);
+            SDL_DestroyTexture(title_texture);
+        }
+        SDL_FreeSurface(title_surface);
+    }
+    
+    // Category headers
+    current_y += line_height;
+    
+    // Group entities by type - we'll check conditions directly in the loop
+    struct { const char *title; SDL_Color color; int type; } categories[] = {
+        {"HOSTILE", red, 0},    // 0 = hostile (is_enemy)
+        {"NEUTRAL", cyan, 1},   // 1 = neutral (!is_enemy && !is_treasure)
+        {"FRIENDLY", green, 2}  // 2 = friendly (is_treasure)
+    };
+    
+    for (int cat = 0; cat < 3; cat++) {
+        // Draw category title
+        SDL_Surface *cat_surface = TTF_RenderText_Solid(g->info_font, categories[cat].title, categories[cat].color);
+        if (cat_surface) {
+            SDL_Texture *cat_texture = SDL_CreateTextureFromSurface(g->renderer, cat_surface);
+            if (cat_texture) {
+                SDL_Rect cat_rect = {start_x, current_y, cat_surface->w, cat_surface->h};
+                SDL_RenderCopy(g->renderer, cat_texture, NULL, &cat_rect);
+                SDL_DestroyTexture(cat_texture);
+            }
+            SDL_FreeSurface(cat_surface);
+        }
+        current_y += line_height;
+        
+        // Draw entities in this category
+        for (unsigned i = 0; i < config->entity_count; i++) {
+            const Entity *entity = &config->entities[i];
+            
+            // Check if entity belongs to this category
+            bool matches_category = false;
+            switch (categories[cat].type) {
+                case 0: matches_category = entity->is_enemy; break;
+                case 1: matches_category = !entity->is_enemy && !entity->is_treasure; break;
+                case 2: matches_category = entity->is_treasure; break;
+            }
+            
+            if (matches_category) {
+                // Count remaining entities of this type on the board
+                unsigned remaining_count = 0;
+                unsigned revealed_count = 0;
+                
+                for (unsigned r = 0; r < g->board->rows; r++) {
+                    for (unsigned c = 0; c < g->board->columns; c++) {
+                        unsigned board_entity_id = board_get_entity_id(g->board, r, c);
+                        if (board_entity_id == entity->id) {
+                            remaining_count++;
+                            TileState state = board_get_tile_state(g->board, r, c);
+                            if (state == TILE_REVEALED) {
+                                revealed_count++;
+                            }
+                        }
+                    }
+                }
+                
+                // Format entity info: "  L1 Fireflies                14/14"
+                char entity_line[256];
+                snprintf(entity_line, sizeof(entity_line), "  L%u %s%*s%u/%u", 
+                        entity->level, 
+                        entity->name,
+                        (int)(25 - strlen(entity->name)), "", // Right-align counts
+                        revealed_count, remaining_count);
+                
+                SDL_Surface *entity_surface = TTF_RenderText_Solid(g->info_font, entity_line, white);
+                if (entity_surface) {
+                    SDL_Texture *entity_texture = SDL_CreateTextureFromSurface(g->renderer, entity_surface);
+                    if (entity_texture) {
+                        SDL_Rect entity_rect = {start_x, current_y, entity_surface->w, entity_surface->h};
+                        SDL_RenderCopy(g->renderer, entity_texture, NULL, &entity_rect);
+                        SDL_DestroyTexture(entity_texture);
+                    }
+                    SDL_FreeSurface(entity_surface);
+                }
+                current_y += line_height;
+                
+                // Check if we're running out of space
+                if (current_y > (WINDOW_HEIGHT - 100) * g->scale) {
+                    break;
+                }
+            }
+        }
+        
+        current_y += line_height / 2; // Extra space between categories
+    }
+}
+
+void game_draw_howto_screen(const struct Game *g) {
+    // Draw dark background
+    SDL_SetRenderDrawColor(g->renderer, 30, 30, 30, 255);
+    SDL_Rect screen = {0, 0, WINDOW_WIDTH * g->scale, WINDOW_HEIGHT * g->scale};
+    SDL_RenderFillRect(g->renderer, &screen);
+    
+    if (!g->info_font) {
+        return; // Can't draw text without font
+    }
+    
+    SDL_Color white = {255, 255, 255, 255};
+    SDL_Color yellow = {255, 255, 0, 255};
+    SDL_Color cyan = {100, 255, 255, 255};
+    
+    int start_x = 10 * g->scale;
+    int start_y = 50 * g->scale;
+    int line_height = 16 * g->scale;
+    int current_y = start_y;
+    int max_width = (WINDOW_WIDTH - 20) * g->scale;
+    
+    // Title
+    SDL_Surface *title_surface = TTF_RenderText_Solid(g->info_font, "How to Play MindSweeper", yellow);
+    if (title_surface) {
+        SDL_Texture *title_texture = SDL_CreateTextureFromSurface(g->renderer, title_surface);
+        if (title_texture) {
+            SDL_Rect title_rect = {start_x, 20 * g->scale, title_surface->w, title_surface->h};
+            SDL_RenderCopy(g->renderer, title_texture, NULL, &title_rect);
+            SDL_DestroyTexture(title_texture);
+        }
+        SDL_FreeSurface(title_surface);
+    }
+    
+    // How-to-play content (simplified for space)
+    const char* lines[] = {
+        "",
+        "OBJECTIVE: Defeat the Ancient Meeoeomoower!",
+        "Level up before taking on dangerous felines.",
+        "",
+        "START: Click the Cats Eye to reveal an area.",
+        "",
+        "KEYBOARD SHORTCUTS:",
+        "• H - Toggle this How to Play screen",
+        "• E - Toggle Entities information screen", 
+        "• ESC - Return to main game",
+        "",
+        "CLICKING TILES:",
+        "• Click hidden tiles to reveal them",
+        "• Numbers show sum of adjacent hostile levels",
+        "• Click neutrals again to interact",
+        "• Hostiles do damage equal to their level",
+        "",
+        "PLAYER STATS:",
+        "• Health: Damage from enemies. 0 = game over",
+        "• Experience: Fill bar to level up",
+        "• Level Up: Click ↑ when bar is full",
+        "",
+        "SPECIAL TILES:",
+        "• Cats Eye: Reveals 3x3 area",
+        "• Chests: Health potions or bonus EXP",
+        "• Boss enemies: Drop special items",
+        "",
+        "WIN: Defeat Ancient Meeoeomoower",
+        "LOSE: Health drops to 0",
+        "",
+        "Good luck, MindSweeper!"
+    };
+    
+    const int num_lines = sizeof(lines) / sizeof(lines[0]);
+    
+    for (int i = 0; i < num_lines && current_y < (WINDOW_HEIGHT - 50) * g->scale; i++) {
+        if (strlen(lines[i]) == 0) {
+            current_y += line_height / 2; // Half-height for empty lines
+            continue;
+        }
+        
+        SDL_Color color = white;
+        if (strstr(lines[i], "OBJECTIVE") || strstr(lines[i], "START") || 
+            strstr(lines[i], "CLICKING") || strstr(lines[i], "PLAYER") ||
+            strstr(lines[i], "SPECIAL") || strstr(lines[i], "WIN") || strstr(lines[i], "LOSE")) {
+            color = cyan; // Headers in cyan
+        }
+        
+        SDL_Surface *line_surface = TTF_RenderText_Solid(g->info_font, lines[i], color);
+        if (line_surface) {
+            SDL_Texture *line_texture = SDL_CreateTextureFromSurface(g->renderer, line_surface);
+            if (line_texture) {
+                SDL_Rect line_rect = {start_x, current_y, line_surface->w, line_surface->h};
+                SDL_RenderCopy(g->renderer, line_texture, NULL, &line_rect);
+                SDL_DestroyTexture(line_texture);
+            }
+            SDL_FreeSurface(line_surface);
+        }
+        current_y += line_height;
+    }
 }

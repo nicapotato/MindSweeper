@@ -53,6 +53,12 @@ struct Board {
         TileAnimation *animations;       // 1D array: animation state per tile
         unsigned *display_sprites;       // 1D array: current visual sprite index
         
+        // Threat level system (minesweeper logic)
+        unsigned *threat_levels;         // 1D array: calculated threat levels for empty tiles
+        
+        // TTF font rendering for threat levels
+        TTF_Font *threat_font;           // TTF font for threat level display
+        
         unsigned rows;
         unsigned columns;
         int scale;
@@ -121,5 +127,9 @@ void board_reveal_all_tiles(struct Board *b);
 
 // Config access
 const GameConfig* board_get_config(void);
+
+// Threat level system (minesweeper logic)
+void board_calculate_threat_levels(struct Board *b);
+unsigned board_get_threat_level(const struct Board *b, unsigned row, unsigned col);
 
 #endif

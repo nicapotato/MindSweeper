@@ -16,6 +16,20 @@ typedef struct {
     unsigned exp_to_next_level;
 } PlayerStats;
 
+// UI Screen states for different information screens
+typedef enum {
+    SCREEN_GAME,        // Main game screen (default)
+    SCREEN_ENTITIES,    // Entity information screen
+    SCREEN_HOW_TO_PLAY  // How to play screen
+} UIScreenState;
+
+// Screen toggle buttons
+typedef struct {
+    SDL_Rect entities_button;      // "Entities" button
+    SDL_Rect howto_button;         // "How to Play" button
+    SDL_Rect back_button;          // "Back" button (shown on info screens)
+} ScreenButtons;
+
 // Game over information
 typedef struct {
     bool is_game_over;
@@ -54,6 +68,9 @@ struct Game {
         PlayerPanel *player_panel;
         PlayerStats player;
         AdminPanel admin;
+        UIScreenState current_screen;  // Current UI screen state
+        ScreenButtons screen_buttons;  // Screen toggle buttons
+        TTF_Font *info_font;          // Font for information screens
         bool is_running;
         GameOverInfo game_over_info;  // Replaced simple boolean with detailed info
         unsigned rows;
@@ -72,6 +89,18 @@ void game_update_player_health(struct Game *g, int health_change);
 void game_level_up_player(struct Game *g);
 unsigned game_calculate_max_health(unsigned level);
 unsigned game_calculate_exp_requirement(unsigned level);
+
+// Screen management functions
+void game_init_screen_system(struct Game *g);
+void game_set_screen(struct Game *g, UIScreenState screen);
+void game_setup_screen_buttons(struct Game *g);
+bool game_handle_screen_button_click(struct Game *g, int x, int y);
+
+// Screen drawing functions
+void game_draw_entities_screen(const struct Game *g);
+void game_draw_howto_screen(const struct Game *g);
+void game_draw_screen_buttons(const struct Game *g);
+void game_draw_text_wrapped(const struct Game *g, const char *text, int x, int y, int max_width, SDL_Color color);
 
 // Admin panel functions
 void game_toggle_admin_panel(struct Game *g);
