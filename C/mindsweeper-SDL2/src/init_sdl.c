@@ -12,6 +12,11 @@ bool game_init_sdl(struct Game *g) {
         return false;
     }
 
+    if (TTF_Init() == -1) {
+        fprintf(stderr, "Error initializing SDL_ttf: %s\n", TTF_GetError());
+        return false;
+    }
+
     g->window = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED,
                                  SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH,
                                  WINDOW_HEIGHT, 0);

@@ -180,8 +180,8 @@ bool board_reset(struct Board *b) {
         b->display_sprites[i] = SPRITE_HIDDEN;  // Hidden sprite from main.h
         
         // Generate random variations for TILE_HIDDEN tiles (indices 5-7 as requested)
-        b->tile_variations[i] = 5 + (rand() % 3);  // Random from 5, 6, 7
-        b->tile_rotations[i] = rand() % 4;          // Random rotation 0-3 (0°, 90°, 180°, 270°)
+        b->tile_variations[i] = (unsigned)(5 + (rand() % 3));  // Random from 5, 6, 7
+        b->tile_rotations[i] = (unsigned)(rand() % 4);          // Random rotation 0-3 (0°, 90°, 180°, 270°)
     }
 
     return true;
@@ -224,7 +224,7 @@ void board_set_scale(struct Board *b, int scale) {
     b->scale = scale;
     b->piece_size = PIECE_SIZE * b->scale;
     b->rect.x = (PIECE_SIZE - BORDER_LEFT) * b->scale;
-    b->rect.y = BORDER_HEIGHT * b->scale;
+    b->rect.y = GAME_BOARD_Y * b->scale;
     b->rect.w = (int)b->columns * b->piece_size;
     b->rect.h = (int)b->rows * b->piece_size;
 }

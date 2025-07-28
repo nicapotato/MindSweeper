@@ -22,6 +22,11 @@ typedef struct {
     SDL_Rect rect;
     int scale;
     unsigned columns;
+    SDL_Rect level_up_button;  // Level up button area
+    bool can_level_up;         // Whether level up is available
+    SDL_Texture *sprite_sheet; // For level-up button sprite
+    SDL_Rect *sprite_src_rects; // Source rectangles for sprites
+    TTF_Font *font;             // TTF font for text rendering
 } PlayerPanel;
 
 // Admin panel state
@@ -74,5 +79,7 @@ void player_panel_free(PlayerPanel **panel);
 void player_panel_set_scale(PlayerPanel *p, int scale);
 void player_panel_set_size(PlayerPanel *p, unsigned columns);
 void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats);
+bool player_panel_handle_click(PlayerPanel *p, int x, int y, struct Game *g);
+void player_panel_draw_text(const PlayerPanel *p, const char *text, int x, int y, SDL_Color color);
 
 #endif

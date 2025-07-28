@@ -4,68 +4,508 @@
 #include <string.h>
 
 #ifdef WASM_BUILD
-// WASM fallback implementations without JSON parsing
-bool config_load(GameConfig *config, const char *config_file) {
-    (void)config_file;
+// WASM implementations - simplified but functional
+
+static char* read_file_contents_wasm(const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        fprintf(stderr, "WASM: Failed to open file: %s\n", filename);
+        return NULL;
+    }
     
-    // Hardcode basic config values for WASM build
-    config->rows = 10;
-    config->cols = 14;
-    config->starting_health = 8;
-    config->starting_experience = 5;
-    config->starting_level = 1;
+    fseek(file, 0, SEEK_END);
+    long length = ftell(file);
+    fseek(file, 0, SEEK_SET);
     
-    // Create basic entities (just empty and a test dragon)
-    config->entity_count = 2;
-    config->entities = calloc(config->entity_count, sizeof(Entity));
+    char *content = malloc((size_t)length + 1);
+    if (!content) {
+        fclose(file);
+        return NULL;
+    }
     
-    // Entity 0: Empty
-    config->entities[0].id = 0;
-    strcpy(config->entities[0].name, "Empty");
-    strcpy(config->entities[0].description, "An empty tile");
-    config->entities[0].sprite_pos.x = 5;
-    config->entities[0].sprite_pos.y = 4;
+    fread(content, 1, (size_t)length, file);
+    content[length] = '\0';
+    fclose(file);
     
-    // Entity 1: Test Dragon
-    config->entities[1].id = 1;
-    strcpy(config->entities[1].name, "Dragon Whelp");
-    strcpy(config->entities[1].description, "A small dragon");
-    config->entities[1].level = 1;
-    config->entities[1].is_enemy = true;
-    config->entities[1].sprite_pos.x = 0;
-    config->entities[1].sprite_pos.y = 3;
-    config->entities[1].transition.next_entity_id = 0; // Transition to empty
-    strcpy(config->entities[1].transition.sound, "crystal");
-    
-    printf("WASM: Loaded hardcoded config with %u entities\n", config->entity_count);
-    return true;
+    return content;
 }
 
-bool config_load_solution(SolutionData *solution, const char *solution_file, unsigned solution_index) {
-    (void)solution_file;
-    (void)solution_index;
+// Simple JSON parser for solution data - handles the specific structure we need
+static char* find_json_string(const char *json, const char *key) {
+    char search_pattern[128];
+    snprintf(search_pattern, sizeof(search_pattern), "\"%s\":", key);
     
-    // Create a simple test board for WASM
-    solution->rows = 10;
-    solution->cols = 14;
-    strcpy(solution->uuid, "wasm-test-board");
+    char *pos = strstr(json, search_pattern);
+    if (!pos) return NULL;
+    
+    pos += strlen(search_pattern);
+    while (*pos == ' ' || *pos == '\t') pos++; // Skip whitespace
+    
+    if (*pos != '"') return NULL;
+    pos++; // Skip opening quote
+    
+    char *end = strchr(pos, '"');
+    if (!end) return NULL;
+    
+    size_t len = (size_t)(end - pos);
+    char *result = malloc(len + 1);
+    strncpy(result, pos, len);
+    result[len] = '\0';
+    
+    return result;
+}
+
+static char* find_board_array(const char *json) {
+    char *board_pos = strstr(json, "\"board\":");
+    if (!board_pos) return NULL;
+    
+    board_pos += 8; // Skip "board":
+    while (*board_pos == ' ' || *board_pos == '\t') board_pos++;
+    
+    if (*board_pos != '[') return NULL;
+    
+    // Find the matching closing bracket
+    int bracket_count = 0;
+    char *start = board_pos;
+    char *pos = board_pos;
+    
+    do {
+        if (*pos == '[') bracket_count++;
+        else if (*pos == ']') bracket_count--;
+        pos++;
+    } while (bracket_count > 0 && *pos != '\0');
+    
+    size_t len = (size_t)(pos - start);
+    char *result = malloc(len + 1);
+    strncpy(result, start, len);
+    result[len] = '\0';
+    
+    return result;
+}
+
+static bool parse_board_array(const char *board_json, SolutionData *solution) {
+    // Count rows (number of '[' at start of lines)
+    solution->rows = 0;
+    const char *pos = board_json;
+    while ((pos = strchr(pos, '[')) != NULL) {
+        // Check if this is a row start (not the main array start)
+        if (pos > board_json && *(pos-1) != ':') {
+            solution->rows++;
+        }
+        pos++;
+    }
+    
+    if (solution->rows == 0) return false;
+    
+    // Find first row to count columns
+    pos = strchr(board_json, '[');
+    if (!pos) return false;
+    pos = strchr(pos + 1, '['); // Skip main array start, find first row
+    if (!pos) return false;
+    
+    solution->cols = 0;
+    pos++; // Skip '['
+    while (*pos != ']' && *pos != '\0') {
+        if (*pos >= '0' && *pos <= '9') {
+            solution->cols++;
+            // Skip to next number
+            while (*pos != ',' && *pos != ']' && *pos != '\0') pos++;
+            if (*pos == ',') pos++;
+        } else {
+            pos++;
+        }
+    }
     
     // Allocate 2D array
     solution->board = malloc(solution->rows * sizeof(unsigned*));
     for (unsigned i = 0; i < solution->rows; i++) {
         solution->board[i] = malloc(solution->cols * sizeof(unsigned));
-        
-        for (unsigned j = 0; j < solution->cols; j++) {
-            // Simple pattern: mostly empty with some dragons
-            if ((i + j) % 7 == 0) {
-                solution->board[i][j] = 1; // Dragon
-            } else {
-                solution->board[i][j] = 0; // Empty
+    }
+    
+    // Parse all numbers
+    pos = board_json;
+    unsigned row = 0, col = 0;
+    bool in_row = false;
+    
+    while (*pos != '\0' && row < solution->rows) {
+        if (*pos == '[' && in_row) {
+            // Start of a new row
+            col = 0;
+        } else if (*pos == '[' && !in_row) {
+            // Check if this is a row start
+            if (pos > board_json && *(pos-1) != ':') {
+                in_row = true;
+                col = 0;
             }
+        } else if (*pos == ']' && in_row) {
+            // End of row
+            row++;
+            in_row = false;
+        } else if ((*pos >= '0' && *pos <= '9') && in_row && col < solution->cols) {
+            // Parse number
+            unsigned num = 0;
+            while (*pos >= '0' && *pos <= '9') {
+                num = num * 10 + (unsigned)(*pos - '0');
+                pos++;
+            }
+            solution->board[row][col] = num;
+            col++;
+            continue; // Don't increment pos again
+        }
+        pos++;
+    }
+    
+    return true;
+}
+
+static bool parse_wasm_entities(const char *content, GameConfig *config) {
+    // Find entities array start
+    char *entities_start = strstr(content, "\"entities\":");
+    if (!entities_start) {
+        printf("WASM: Could not find 'entities' key in config\n");
+        return false;
+    }
+    
+    entities_start = strchr(entities_start, '[');
+    if (!entities_start) {
+        printf("WASM: Could not find entities array start\n");
+        return false;
+    }
+    
+    // Find entities array end
+    char *entities_end = entities_start;
+    int bracket_count = 0;
+    do {
+        if (*entities_end == '[') bracket_count++;
+        else if (*entities_end == ']') bracket_count--;
+        entities_end++;
+    } while (bracket_count > 0 && *entities_end != '\0');
+    
+    if (bracket_count != 0) {
+        printf("WASM: Could not find entities array end\n");
+        return false;
+    }
+    
+    // Count entities by looking for "id": pattern within entities array
+    unsigned entity_count = 0;
+    char *pos = entities_start;
+    while (pos < entities_end && (pos = strstr(pos, "\"id\":")) != NULL) {
+        entity_count++;
+        pos += 5; // Move past "id":
+    }
+    
+    if (entity_count == 0) {
+        printf("WASM: Found 0 entities\n");
+        return false;
+    }
+    
+    printf("WASM: Found %u entities in config\n", entity_count);
+    config->entity_count = entity_count;
+    config->entities = calloc(entity_count, sizeof(Entity));
+    
+    // Parse each entity by finding "id": patterns
+    pos = entities_start;
+    unsigned parsed_entities = 0;
+    
+    while (parsed_entities < entity_count && pos < entities_end && (pos = strstr(pos, "\"id\":")) != NULL) {
+        // Find the start of this entity object (work backwards to find '{')
+        char *entity_start = pos;
+        while (entity_start > entities_start && *entity_start != '{') {
+            entity_start--;
+        }
+        
+        if (*entity_start != '{') {
+            printf("WASM: Could not find entity start for entity %u\n", parsed_entities);
+            pos += 5;
+            continue;
+        }
+        
+        // Find end of this entity
+        int brace_count = 0;
+        char *entity_end = entity_start;
+        do {
+            if (*entity_end == '{') brace_count++;
+            else if (*entity_end == '}') brace_count--;
+            entity_end++;
+        } while (brace_count > 0 && *entity_end != '\0' && entity_end < entities_end);
+        
+        // Extract entity JSON
+        size_t entity_len = (size_t)(entity_end - entity_start);
+        char *entity_json = malloc(entity_len + 1);
+        strncpy(entity_json, entity_start, entity_len);
+        entity_json[entity_len] = '\0';
+        
+        Entity *e = &config->entities[parsed_entities];
+        
+        // Parse ID (we know this exists since we found it)
+        char *id_pos = strstr(entity_json, "\"id\":");
+        if (id_pos) {
+            id_pos += 5;
+            while (*id_pos == ' ' || *id_pos == '\t') id_pos++;
+            e->id = (unsigned)atoi(id_pos);
+        }
+        
+        // Parse name
+        char *name = find_json_string(entity_json, "name");
+        if (name) {
+            strncpy(e->name, name, sizeof(e->name) - 1);
+            e->name[sizeof(e->name) - 1] = '\0';
+            free(name);
+        }
+        
+        // Parse description
+        char *desc = find_json_string(entity_json, "description");
+        if (desc) {
+            strncpy(e->description, desc, sizeof(e->description) - 1);
+            e->description[sizeof(e->description) - 1] = '\0';
+            free(desc);
+        }
+        
+        // Parse level
+        char *level_pos = strstr(entity_json, "\"level\":");
+        if (level_pos) {
+            level_pos += 8;
+            while (*level_pos == ' ' || *level_pos == '\t') level_pos++;
+            e->level = (unsigned)atoi(level_pos);
+        }
+        
+        // Check for enemy tag
+        if (strstr(entity_json, "\"enemy\"")) {
+            e->is_enemy = true;
+        }
+        
+        // Check for treasure tag
+        if (strstr(entity_json, "\"treasure\"")) {
+            e->is_treasure = true;
+        }
+        
+        // Parse sprite position (look for first x and y in revealed section)
+        char *sprites_pos = strstr(entity_json, "\"sprites\":");
+        if (sprites_pos) {
+            char *revealed_pos = strstr(sprites_pos, "\"revealed\":");
+            if (revealed_pos) {
+                char *x_pos = strstr(revealed_pos, "\"x\":");
+                char *y_pos = strstr(revealed_pos, "\"y\":");
+                if (x_pos && y_pos && x_pos < (revealed_pos + 200) && y_pos < (revealed_pos + 200)) {
+                    x_pos += 4;
+                    while (*x_pos == ' ' || *x_pos == '\t') x_pos++;
+                    e->sprite_pos.x = (unsigned)atoi(x_pos);
+                    
+                    y_pos += 4;
+                    while (*y_pos == ' ' || *y_pos == '\t') y_pos++;
+                    e->sprite_pos.y = (unsigned)atoi(y_pos);
+                }
+            }
+        }
+        
+        // Parse entity transition (simplified)
+        char *transition_pos = strstr(entity_json, "\"entity_transition\":");
+        if (transition_pos) {
+            char *cleared_pos = strstr(transition_pos, "\"on_cleared\":");
+            if (cleared_pos) {
+                char *entity_id_pos = strstr(cleared_pos, "\"entity_id\":");
+                if (entity_id_pos) {
+                    entity_id_pos += 12;
+                    while (*entity_id_pos == ' ' || *entity_id_pos == '\t') entity_id_pos++;
+                    e->transition.next_entity_id = (unsigned)atoi(entity_id_pos);
+                }
+                
+                char *sound = find_json_string(cleared_pos, "sound");
+                if (sound) {
+                    strncpy(e->transition.sound, sound, sizeof(e->transition.sound) - 1);
+                    e->transition.sound[sizeof(e->transition.sound) - 1] = '\0';
+                    free(sound);
+                }
+            }
+        } else {
+            // Default: no transition (stays same entity)
+            e->transition.next_entity_id = e->id;
+        }
+        
+        printf("WASM: Parsed entity %u: ID=%u, Name='%s', Level=%u, Sprite=(%u,%u)\n", 
+               parsed_entities, e->id, e->name, e->level, e->sprite_pos.x, e->sprite_pos.y);
+        
+        free(entity_json);
+        parsed_entities++;
+        pos += 5; // Move past current "id":
+    }
+    
+    printf("WASM: Successfully parsed %u entities\n", parsed_entities);
+    return parsed_entities > 0;
+}
+
+bool config_load(GameConfig *config, const char *config_file) {
+    printf("WASM: Loading config from %s\n", config_file);
+    
+    char *content = read_file_contents_wasm(config_file);
+    if (!content) {
+        printf("WASM: Failed to read config file, using minimal defaults\n");
+        // Minimal fallback
+        config->rows = 10;
+        config->cols = 14;
+        config->starting_health = 8;
+        config->starting_experience = 5;
+        config->starting_level = 2;
+        config->entity_count = 1;
+        config->entities = calloc(1, sizeof(Entity));
+        config->entities[0].id = 0;
+        strcpy(config->entities[0].name, "Empty");
+        return true;
+    }
+    
+    // Parse basic config values
+    config->rows = 10;
+    config->cols = 14;
+    config->starting_health = 8;
+    config->starting_experience = 5;
+    config->starting_level = 2;
+    
+    // Parse game_state section
+    char *game_state_pos = strstr(content, "\"game_state\":");
+    if (game_state_pos) {
+        char *health_pos = strstr(game_state_pos, "\"starting_max_health\":");
+        if (health_pos) {
+            health_pos += 22;
+            while (*health_pos == ' ' || *health_pos == '\t') health_pos++;
+            config->starting_health = (unsigned)atoi(health_pos);
+        }
+        
+        char *exp_pos = strstr(game_state_pos, "\"starting_max_experience\":");
+        if (exp_pos) {
+            exp_pos += 26;
+            while (*exp_pos == ' ' || *exp_pos == '\t') exp_pos++;
+            config->starting_experience = (unsigned)atoi(exp_pos);
+        }
+        
+        char *level_pos = strstr(game_state_pos, "\"starting_level\":");
+        if (level_pos) {
+            level_pos += 17;
+            while (*level_pos == ' ' || *level_pos == '\t') level_pos++;
+            config->starting_level = (unsigned)atoi(level_pos);
         }
     }
     
-    printf("WASM: Created test board (%ux%u)\n", solution->rows, solution->cols);
+    // Parse entities
+    if (!parse_wasm_entities(content, config)) {
+        printf("WASM: Failed to parse entities, using fallback\n");
+        config->entity_count = 2;
+        config->entities = calloc(2, sizeof(Entity));
+        
+        // Entity 0: Empty
+        config->entities[0].id = 0;
+        strcpy(config->entities[0].name, "Empty");
+        strcpy(config->entities[0].description, "An empty tile");
+        config->entities[0].sprite_pos.x = 3;
+        config->entities[0].sprite_pos.y = 4;
+        
+        // Entity 1: Cave Rat
+        config->entities[1].id = 1;
+        strcpy(config->entities[1].name, "Cave Rat");
+        strcpy(config->entities[1].description, "A small rodent");
+        config->entities[1].level = 1;
+        config->entities[1].is_enemy = true;
+        config->entities[1].sprite_pos.x = 0;
+        config->entities[1].sprite_pos.y = 0;
+        config->entities[1].transition.next_entity_id = 0;
+        strcpy(config->entities[1].transition.sound, "crystal");
+    }
+    
+    free(content);
+    
+    printf("WASM: Loaded config with %u entities, starting level %u, health %u\n", 
+           config->entity_count, config->starting_level, config->starting_health);
+    
+    return true;
+}
+
+bool config_load_solution(SolutionData *solution, const char *solution_file, unsigned solution_index) {
+    printf("WASM: Loading solution from %s, index %u\n", solution_file, solution_index);
+    
+    char *content = read_file_contents_wasm(solution_file);
+    if (!content) {
+        printf("WASM: Failed to read solution file, using fallback\n");
+        // Fallback to hardcoded solution
+        solution->rows = 10;
+        solution->cols = 14;
+        strcpy(solution->uuid, "wasm-fallback-board");
+        
+        solution->board = malloc(solution->rows * sizeof(unsigned*));
+        for (unsigned i = 0; i < solution->rows; i++) {
+            solution->board[i] = malloc(solution->cols * sizeof(unsigned));
+            for (unsigned j = 0; j < solution->cols; j++) {
+                if ((i + j) % 7 == 0) {
+                    solution->board[i][j] = 1; // Dragon
+                } else {
+                    solution->board[i][j] = 0; // Empty
+                }
+            }
+        }
+        return true;
+    }
+    
+    // Find the requested solution in the JSON array
+    char *solution_start = content;
+    for (unsigned i = 0; i <= solution_index; i++) {
+        solution_start = strchr(solution_start, '{');
+        if (!solution_start) {
+            printf("WASM: Solution index %u not found\n", solution_index);
+            free(content);
+            return false;
+        }
+        if (i < solution_index) {
+            // Find the end of this solution and move to the next
+            int brace_count = 0;
+            char *pos = solution_start;
+            do {
+                if (*pos == '{') brace_count++;
+                else if (*pos == '}') brace_count--;
+                pos++;
+            } while (brace_count > 0 && *pos != '\0');
+            solution_start = pos;
+        }
+    }
+    
+    // Find the end of the current solution
+    int brace_count = 0;
+    char *solution_end = solution_start;
+    do {
+        if (*solution_end == '{') brace_count++;
+        else if (*solution_end == '}') brace_count--;
+        solution_end++;
+    } while (brace_count > 0 && *solution_end != '\0');
+    
+    // Extract just this solution
+    size_t sol_len = (size_t)(solution_end - solution_start);
+    char *solution_json = malloc(sol_len + 1);
+    strncpy(solution_json, solution_start, sol_len);
+    solution_json[sol_len] = '\0';
+    
+    // Parse UUID
+    char *uuid = find_json_string(solution_json, "uuid");
+    if (uuid) {
+        strncpy(solution->uuid, uuid, sizeof(solution->uuid) - 1);
+        solution->uuid[sizeof(solution->uuid) - 1] = '\0';
+        free(uuid);
+    } else {
+        strcpy(solution->uuid, "unknown-uuid");
+    }
+    
+    // Parse board array
+    char *board_json = find_board_array(solution_json);
+    if (!board_json || !parse_board_array(board_json, solution)) {
+        printf("WASM: Failed to parse board array\n");
+        free(content);
+        free(solution_json);
+        if (board_json) free(board_json);
+        return false;
+    }
+    
+    printf("WASM: Successfully loaded solution %u: %s (%ux%u)\n", 
+           solution_index, solution->uuid, solution->rows, solution->cols);
+    
+    free(content);
+    free(solution_json);
+    free(board_json);
     return true;
 }
 

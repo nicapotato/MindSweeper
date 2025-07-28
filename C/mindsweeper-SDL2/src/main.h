@@ -3,6 +3,7 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_ttf.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,8 +17,8 @@
 #define IMG_FLAGS IMG_INIT_PNG
 
 #define WINDOW_TITLE "MindSweeper"
-#define WINDOW_WIDTH 512   // Increased to fit 14 columns + borders
-#define WINDOW_HEIGHT 480  // Increased for player panel + 10 rows + borders
+#define WINDOW_WIDTH 480   // Slightly reduced width for better formatting
+#define WINDOW_HEIGHT 460  // Increased height for better panel spacing
 
 #define PIECE_SIZE 16
 #define BORDER_HEIGHT 55
@@ -25,10 +26,13 @@
 #define BORDER_RIGHT 8
 #define BORDER_BOTTOM 8
 
-// Player panel dimensions
-#define PLAYER_PANEL_HEIGHT 30
+// Player panel dimensions - moved below game board
+#define PLAYER_PANEL_HEIGHT 60
 #define PLAYER_PANEL_Y 15
 #define PLAYER_STATS_FONT_SIZE 10
+
+// Game board positioning - no top panel, start at top
+#define GAME_BOARD_Y 15  // Start near the top
 
 #define DIGIT_BACK_WIDTH 41
 #define DIGIT_BACK_HEIGHT 25

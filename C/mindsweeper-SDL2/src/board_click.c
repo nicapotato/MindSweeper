@@ -1,3 +1,4 @@
+#include "board_click.h"
 #include "game.h"
 #include "config.h"
 

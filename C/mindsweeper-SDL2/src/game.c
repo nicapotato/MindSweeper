@@ -1,6 +1,8 @@
 #include "game.h"
+#include "config.h"
 #include "init_sdl.h"
 #include "board_click.h"
+#include "load_media.h"
 
 #ifdef WASM_BUILD
 // Global game pointer for Emscripten main loop
@@ -124,6 +126,7 @@ void game_free(struct Game **game) {
             g->window = NULL;
         }
 
+        TTF_Quit();
         IMG_Quit();
         SDL_Quit();
 
@@ -232,6 +235,11 @@ void game_mouse_down(struct Game *g, int x, int y, Uint8 button) {
 
 bool game_mouse_up(struct Game *g, int x, int y, Uint8 button) {
     (void)button;
+    
+    // Check if click is in player panel first
+    if (player_panel_handle_click(g->player_panel, x, y, g)) {
+        return true;
+    }
     
     // Convert screen coordinates to board coordinates
     int board_x = x - g->board->rect.x;
@@ -349,15 +357,15 @@ void game_update(struct Game *g) {
     
     // Update other game systems
     clock_update(g->clock);
+    
+    // Check if player can level up
+    g->player_panel->can_level_up = (g->player.experience >= g->player.exp_to_next_level);
 }
 
 void game_draw(const struct Game *g) {
     SDL_RenderClear(g->renderer);
 
-    border_draw(g->border);
     board_draw(g->board);
-    clock_draw(g->clock);
-    face_draw(g->face);
     player_panel_draw(g->player_panel, &g->player);
 
     SDL_RenderPresent(g->renderer);
@@ -393,7 +401,11 @@ bool game_run(struct Game *g) {
 // ========== PLAYER STATS FUNCTIONS ==========
 
 void game_init_player_stats(struct Game *g) {
-    g->player.level = 1;
+    // Get starting level from config
+    const GameConfig *config = board_get_config();
+    unsigned starting_level = (config && config->starting_level > 0) ? config->starting_level : 1;
+    
+    g->player.level = starting_level;
     g->player.max_health = game_calculate_max_health(g->player.level);
     g->player.health = g->player.max_health;
     g->player.experience = 0;
@@ -541,6 +553,22 @@ bool player_panel_new(PlayerPanel **panel, SDL_Renderer *renderer, unsigned colu
     p->renderer = renderer;
     p->columns = columns;
     p->scale = scale;
+    p->can_level_up = false;
+
+    // Load sprite sheet for level-up button
+    if (!load_media_sheet(p->renderer, &p->sprite_sheet, 
+                          "images/sprite-sheet-cats.png",
+                          PIECE_SIZE, PIECE_SIZE, &p->sprite_src_rects)) {
+        fprintf(stderr, "Failed to load sprite sheet for player panel\n");
+        return false;
+    }
+
+    // Load TTF font
+    p->font = TTF_OpenFont("images/m6x11.ttf", 12 * p->scale);
+    if (!p->font) {
+        fprintf(stderr, "Failed to load TTF font: %s\n", TTF_GetError());
+        return false;
+    }
 
     player_panel_set_scale(p, p->scale);
 
@@ -550,6 +578,21 @@ bool player_panel_new(PlayerPanel **panel, SDL_Renderer *renderer, unsigned colu
 void player_panel_free(PlayerPanel **panel) {
     if (*panel) {
         PlayerPanel *p = *panel;
+        
+        if (p->sprite_src_rects) {
+            free(p->sprite_src_rects);
+            p->sprite_src_rects = NULL;
+        }
+
+        if (p->sprite_sheet) {
+            SDL_DestroyTexture(p->sprite_sheet);
+            p->sprite_sheet = NULL;
+        }
+
+        if (p->font) {
+            TTF_CloseFont(p->font);
+            p->font = NULL;
+        }
         
         p->renderer = NULL;
         
@@ -562,10 +605,16 @@ void player_panel_free(PlayerPanel **panel) {
 
 void player_panel_set_scale(PlayerPanel *p, int scale) {
     p->scale = scale;
-    p->rect.x = (PIECE_SIZE * 4) * p->scale; // Position after face and clock
-    p->rect.y = PLAYER_PANEL_Y * p->scale;
-    p->rect.w = (PIECE_SIZE * 6) * p->scale; // Width for stats display
+    p->rect.x = (PIECE_SIZE - BORDER_LEFT) * p->scale; // Align with game board
+    p->rect.y = (GAME_BOARD_Y + (PIECE_SIZE * 10) + 10) * p->scale; // Below game board
+    p->rect.w = (PIECE_SIZE * 14) * p->scale; // Full width of game board
     p->rect.h = PLAYER_PANEL_HEIGHT * p->scale;
+    
+    // Set up level-up button position (left side)
+    p->level_up_button.x = p->rect.x + 5 * p->scale;
+    p->level_up_button.y = p->rect.y + 5 * p->scale;
+    p->level_up_button.w = (PIECE_SIZE * 2) * p->scale;
+    p->level_up_button.h = (PIECE_SIZE * 2) * p->scale;
 }
 
 void player_panel_set_size(PlayerPanel *p, unsigned columns) {
@@ -575,49 +624,188 @@ void player_panel_set_size(PlayerPanel *p, unsigned columns) {
 }
 
 void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats) {
-    // Set drawing color to a semi-transparent dark background
-    SDL_SetRenderDrawColor(p->renderer, 40, 40, 40, 180);
+    // Draw grey panel background similar to border style
+    SDL_SetRenderDrawColor(p->renderer, 192, 192, 192, 255); // Light grey
     SDL_RenderFillRect(p->renderer, &p->rect);
     
-    // Set border color
-    SDL_SetRenderDrawColor(p->renderer, 100, 100, 100, 255);
+    // Draw darker border around panel
+    SDL_SetRenderDrawColor(p->renderer, 128, 128, 128, 255); // Dark grey
     SDL_RenderDrawRect(p->renderer, &p->rect);
     
-    // For now, we'll use simple colored rectangles to represent the stats
-    // This is a placeholder - in a full implementation you'd want text rendering
-    
-    // Level indicator (green bars)
-    SDL_SetRenderDrawColor(p->renderer, 0, 255, 0, 255);
-    SDL_Rect level_rect = {
-        p->rect.x + 5 * p->scale,
-        p->rect.y + 5 * p->scale,
-        (int)(stats->level % 20) * p->scale, // Visual level indicator
-        8 * p->scale
+    // Draw inner raised border effect
+    SDL_Rect inner_border = {
+        p->rect.x + 1,
+        p->rect.y + 1,
+        p->rect.w - 2,
+        p->rect.h - 2
     };
-    SDL_RenderFillRect(p->renderer, &level_rect);
+    SDL_SetRenderDrawColor(p->renderer, 255, 255, 255, 255); // White highlight
+    SDL_RenderDrawRect(p->renderer, &inner_border);
     
-    // Health indicator (red bars)
-    SDL_SetRenderDrawColor(p->renderer, 255, 0, 0, 255);
-    int health_width = (int)((float)stats->health / stats->max_health * 60.0f * p->scale);
-    SDL_Rect health_rect = {
-        p->rect.x + 5 * p->scale,
-        p->rect.y + 15 * p->scale,
+    // Draw level-up button (left side with sprite 0,0)
+    if (p->can_level_up) {
+        // Button background
+        SDL_SetRenderDrawColor(p->renderer, 255, 255, 0, 255); // Yellow highlight
+        SDL_RenderFillRect(p->renderer, &p->level_up_button);
+        
+        // Button border
+        SDL_SetRenderDrawColor(p->renderer, 0, 0, 0, 255);
+        SDL_RenderDrawRect(p->renderer, &p->level_up_button);
+        
+        // Draw sprite (0,0) from sprite sheet
+        if (p->sprite_sheet && p->sprite_src_rects) {
+            SDL_RenderCopy(p->renderer, p->sprite_sheet, &p->sprite_src_rects[0], &p->level_up_button);
+        }
+    } else {
+        // Disabled button
+        SDL_SetRenderDrawColor(p->renderer, 160, 160, 160, 255); // Grey
+        SDL_RenderFillRect(p->renderer, &p->level_up_button);
+        SDL_SetRenderDrawColor(p->renderer, 100, 100, 100, 255);
+        SDL_RenderDrawRect(p->renderer, &p->level_up_button);
+    }
+    
+    // Level display area (to the left of health/experience bars)
+    int bars_start_x = p->level_up_button.x + p->level_up_button.w + 10 * p->scale;
+    SDL_Rect level_display = {
+        bars_start_x,
+        p->level_up_button.y + 8 * p->scale, // Center vertically
+        50 * p->scale,
+        20 * p->scale
+    };
+    
+    // Level background (light grey with border)
+    SDL_SetRenderDrawColor(p->renderer, 240, 240, 240, 255); // Very light grey
+    SDL_RenderFillRect(p->renderer, &level_display);
+    SDL_SetRenderDrawColor(p->renderer, 0, 0, 0, 255);
+    SDL_RenderDrawRect(p->renderer, &level_display);
+    
+    // Draw level number using TTF font
+    char level_text[16];
+    snprintf(level_text, sizeof(level_text), "%u", stats->level);
+    SDL_Color black = {0, 0, 0, 255};
+    player_panel_draw_text(p, level_text, 
+                          level_display.x + 4 * p->scale, 
+                          level_display.y + 4 * p->scale, 
+                          black);
+    
+    // Health bar with background and progress
+    int health_start_x = bars_start_x + level_display.w + 10 * p->scale;
+    SDL_Rect health_bg = {
+        health_start_x,
+        p->level_up_button.y,
+        100 * p->scale,  // Reduced width to fit better
+        16 * p->scale
+    };
+    
+    // Health background (dark red)
+    SDL_SetRenderDrawColor(p->renderer, 128, 0, 0, 255);
+    SDL_RenderFillRect(p->renderer, &health_bg);
+    
+    // Health progress (bright red)
+    int health_width = (int)((float)stats->health / stats->max_health * 100.0f * p->scale);
+    SDL_Rect health_progress = {
+        health_start_x,
+        p->level_up_button.y,
         health_width,
-        8 * p->scale
+        16 * p->scale
     };
-    SDL_RenderFillRect(p->renderer, &health_rect);
+    SDL_SetRenderDrawColor(p->renderer, 255, 0, 0, 255);
+    SDL_RenderFillRect(p->renderer, &health_progress);
     
-    // Experience indicator (blue bars)
-    SDL_SetRenderDrawColor(p->renderer, 0, 0, 255, 255);
-    int exp_width = (int)((float)stats->experience / stats->exp_to_next_level * 60.0f * p->scale);
-    SDL_Rect exp_rect = {
-        p->rect.x + 5 * p->scale,
-        p->rect.y + 25 * p->scale,
-        exp_width,
-        8 * p->scale
+    // Health border
+    SDL_SetRenderDrawColor(p->renderer, 0, 0, 0, 255);
+    SDL_RenderDrawRect(p->renderer, &health_bg);
+    
+    // Draw health text (current/max)
+    char health_text[32];
+    snprintf(health_text, sizeof(health_text), "%u/%u", stats->health, stats->max_health);
+    SDL_Color white = {255, 255, 255, 255};
+    player_panel_draw_text(p, health_text, 
+                          health_bg.x + 2 * p->scale, 
+                          health_bg.y + 2 * p->scale, 
+                          white);
+    
+    // Experience bar with background and progress  
+    SDL_Rect exp_bg = {
+        health_start_x,
+        p->level_up_button.y + 20 * p->scale,
+        100 * p->scale,  // Reduced width to match health bar
+        16 * p->scale
     };
-    SDL_RenderFillRect(p->renderer, &exp_rect);
+    
+    // Experience background (dark blue)
+    SDL_SetRenderDrawColor(p->renderer, 0, 0, 128, 255);
+    SDL_RenderFillRect(p->renderer, &exp_bg);
+    
+    // Experience progress (bright blue)
+    int exp_width = (int)((float)stats->experience / stats->exp_to_next_level * 100.0f * p->scale);
+    SDL_Rect exp_progress = {
+        health_start_x,
+        p->level_up_button.y + 20 * p->scale,
+        exp_width,
+        16 * p->scale
+    };
+    SDL_SetRenderDrawColor(p->renderer, 0, 100, 255, 255);
+    SDL_RenderFillRect(p->renderer, &exp_progress);
+    
+    // Experience border
+    SDL_SetRenderDrawColor(p->renderer, 0, 0, 0, 255);
+    SDL_RenderDrawRect(p->renderer, &exp_bg);
+    
+    // Draw experience text (current/max)
+    char exp_text[32];
+    snprintf(exp_text, sizeof(exp_text), "%u/%u", stats->experience, stats->exp_to_next_level);
+    player_panel_draw_text(p, exp_text, 
+                          exp_bg.x + 2 * p->scale, 
+                          exp_bg.y + 2 * p->scale, 
+                          white);
+    
+    // TODO: Add text rendering for numeric values inside bars
+    // For now, we'll use simple visual indicators
     
     // Reset render color to default
     SDL_SetRenderDrawColor(p->renderer, 0, 0, 0, 255);
+}
+
+void player_panel_draw_text(const PlayerPanel *p, const char *text, int x, int y, SDL_Color color) {
+    if (!p->font || !text) {
+        return;
+    }
+    
+    SDL_Surface *text_surface = TTF_RenderText_Solid(p->font, text, color);
+    if (!text_surface) {
+        return;
+    }
+    
+    SDL_Texture *text_texture = SDL_CreateTextureFromSurface(p->renderer, text_surface);
+    if (!text_texture) {
+        SDL_FreeSurface(text_surface);
+        return;
+    }
+    
+    SDL_Rect dest_rect = {
+        x,
+        y,
+        text_surface->w,
+        text_surface->h
+    };
+    
+    SDL_RenderCopy(p->renderer, text_texture, NULL, &dest_rect);
+    
+    SDL_DestroyTexture(text_texture);
+    SDL_FreeSurface(text_surface);
+}
+
+bool player_panel_handle_click(PlayerPanel *p, int x, int y, struct Game *g) {
+    // Check if click is within the level-up button
+    if (p->can_level_up && 
+        x >= p->level_up_button.x && x < p->level_up_button.x + p->level_up_button.w &&
+        y >= p->level_up_button.y && y < p->level_up_button.y + p->level_up_button.h) {
+        
+        printf("Level-up button clicked!\n");
+        game_level_up_player(g);
+        return true;
+    }
+    
+    return false;
 }
