@@ -13,6 +13,12 @@ unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state);
 
 bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
                unsigned columns, int scale) {
+    // Parameter validation
+    if (!board || !renderer || rows == 0 || columns == 0 || scale <= 0) {
+        fprintf(stderr, "Invalid parameters to board_new\n");
+        return false;
+    }
+
     *board = calloc(1, sizeof(struct Board));
     if (!*board) {
         fprintf(stderr, "Error in calloc of new board.\n");
@@ -66,75 +72,88 @@ bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
 }
 
 void board_free(struct Board **board) {
-    if (*board) {
-        struct Board *b = *board;
-
-        board_free_arrays(b);
-
-        if (b->entity_src_rects) {
-            free(b->entity_src_rects);
-            b->entity_src_rects = NULL;
-        }
-
-        if (b->entity_sprites) {
-            SDL_DestroyTexture(b->entity_sprites);
-            b->entity_sprites = NULL;
-        }
-
-        if (b->tile_src_rects) {
-            free(b->tile_src_rects);
-            b->tile_src_rects = NULL;
-        }
-
-        if (b->tile_sprites) {
-            SDL_DestroyTexture(b->tile_sprites);
-            b->tile_sprites = NULL;
-        }
-
-        b->renderer = NULL;
-
-        free(*board);
-        *board = NULL;
-
-        printf("board clean.\n");
+    if (!board || !*board) {
+        return; // Safe to call with NULL
     }
+    
+    struct Board *b = *board;
+
+    board_free_arrays(b);
+
+    if (b->entity_src_rects) {
+        free(b->entity_src_rects);
+        b->entity_src_rects = NULL;
+    }
+
+    if (b->entity_sprites) {
+        SDL_DestroyTexture(b->entity_sprites);
+        b->entity_sprites = NULL;
+    }
+
+    if (b->tile_src_rects) {
+        free(b->tile_src_rects);
+        b->tile_src_rects = NULL;
+    }
+
+    if (b->tile_sprites) {
+        SDL_DestroyTexture(b->tile_sprites);
+        b->tile_sprites = NULL;
+    }
+
+    b->renderer = NULL;
+
+    free(*board);
+    *board = NULL;
+
+    printf("board clean.\n");
 }
 
 bool board_calloc_arrays(struct Board *b) {
+    // Parameter validation
+    if (!b || b->rows == 0 || b->columns == 0) {
+        fprintf(stderr, "Invalid parameters to board_calloc_arrays\n");
+        return false;
+    }
+
     size_t total_tiles = (size_t)(b->rows * b->columns);
 
     b->entity_ids = calloc(total_tiles, sizeof(unsigned));
     if (!b->entity_ids) {
-        return false;
+        goto cleanup_failure;
     }
 
     b->tile_states = calloc(total_tiles, sizeof(TileState));
     if (!b->tile_states) {
-        return false;
+        goto cleanup_failure;
     }
 
     b->animations = calloc(total_tiles, sizeof(TileAnimation));
     if (!b->animations) {
-        return false;
+        goto cleanup_failure;
     }
 
     b->display_sprites = calloc(total_tiles, sizeof(unsigned));
     if (!b->display_sprites) {
-        return false;
+        goto cleanup_failure;
     }
 
     // Allocate tile variation arrays
     b->tile_variations = calloc(total_tiles, sizeof(unsigned));
     if (!b->tile_variations) {
-        return false;
+        goto cleanup_failure;
     }
 
     b->tile_rotations = calloc(total_tiles, sizeof(unsigned));
     if (!b->tile_rotations) {
-        return false;
+        goto cleanup_failure;
     }
 
     return true;
+
+cleanup_failure:
+    // Clean up any partially allocated memory
+    board_free_arrays(b);
+    return false;
 }
 
 void board_free_arrays(struct Board *b) {
@@ -179,9 +198,9 @@ bool board_reset(struct Board *b) {
         b->animations[i].type = ANIM_NONE;
         b->display_sprites[i] = SPRITE_HIDDEN;  // Hidden sprite from main.h
         
-        // Generate random variations for TILE_HIDDEN tiles (indices 5-7 as requested)
-        b->tile_variations[i] = (unsigned)(5 + (rand() % 3));  // Random from 5, 6, 7
-        b->tile_rotations[i] = (unsigned)(rand() % 4);          // Random rotation 0-3 (0°, 90°, 180°, 270°)
+        // Generate random variations for TILE_HIDDEN tiles
+        b->tile_variations[i] = (unsigned)(MIN_TILE_VARIATION + (rand() % (MAX_TILE_VARIATION - MIN_TILE_VARIATION + 1)));
+        b->tile_rotations[i] = (unsigned)(rand() % NUM_TILE_ROTATIONS);          // Random rotation 0-3 (0°, 90°, 180°, 270°)
     }
 
     return true;

@@ -51,20 +51,22 @@ bool game_new(struct Game **game) {
     struct Game *g = *game;
 
     g->is_running = true;
-    g->rows = 10;      // Match config_v2.json
-    g->columns = 14;   // Match config_v2.json
-    g->scale = 2;
+    g->game_over_info.is_game_over = false;  // Initialize game over info
+    g->game_over_info.death_cause[0] = '\0'; // Empty death cause string
+    g->rows = DEFAULT_BOARD_ROWS;      // Use constant instead of magic number
+    g->columns = DEFAULT_BOARD_COLS;   // Use constant instead of magic number
+    g->scale = DEFAULT_SCALE;          // Use constant instead of magic number
 
     if (!game_init_sdl(g)) {
-        return false;
+        goto cleanup_failure;
     }
 
     if (!border_new(&g->border, g->renderer, g->rows, g->columns, g->scale)) {
-        return false;
+        goto cleanup_failure;
     }
 
     if (!board_new(&g->board, g->renderer, g->rows, g->columns, g->scale)) {
-        return false;
+        goto cleanup_failure;
     }
 
     // Load solution data
@@ -74,23 +76,28 @@ bool game_new(struct Game **game) {
     if (!board_load_solution(g->board, "latest-s-v0_0_9.json", 0)) {
 #endif
         fprintf(stderr, "Failed to load solution data\n");
-        return false;
+        goto cleanup_failure;
     }
 
+    // Initialize admin panel with solution count
+    g->admin.total_solutions = config_count_solutions("latest-s-v0_0_9.json");
+    g->admin.current_solution_index = 0;
+    printf("Total solutions available: %u\n", g->admin.total_solutions);
+
     if (!clock_new(&g->clock, g->renderer, g->columns, g->scale)) {
-        return false;
+        goto cleanup_failure;
     }
 
     if (!face_new(&g->face, g->renderer, g->columns, g->scale)) {
-        return false;
+        goto cleanup_failure;
     }
 
     if (!player_panel_new(&g->player_panel, g->renderer, g->columns, g->scale)) {
-        return false;
+        goto cleanup_failure;
     }
 
     if (!game_create_string(&g->size_str, "MindSweeper")) {
-        return false;
+        goto cleanup_failure;
     }
 
     game_set_title(g);
@@ -99,6 +106,11 @@ bool game_new(struct Game **game) {
     game_init_player_stats(g);
 
     return true;
+
+cleanup_failure:
+    // Clean up any partially initialized components
+    game_free(game);
+    return false;
 }
 
 void game_free(struct Game **game) {
@@ -156,24 +168,46 @@ bool game_create_string(char **game_str, const char *new_str) {
 }
 
 void game_set_title(struct Game *g) {
-    char *title = calloc(256, sizeof(char));
+    char *title = calloc(MAX_TITLE_LENGTH, sizeof(char));
     if (!title) {
         return;
     }
 
-    snprintf(title, 256, "%s - %s", WINDOW_TITLE, g->size_str);
+    snprintf(title, MAX_TITLE_LENGTH, "%s - %s", WINDOW_TITLE, g->size_str);
     SDL_SetWindowTitle(g->window, title);
 
     free(title);
 }
 
 bool game_reset(struct Game *g) {
-    if (!board_reset(g->board)) {
-        return false;
+    // Pick a random solution index (excluding the current one for variety)
+    unsigned new_solution_index;
+    if (g->admin.total_solutions > 1) {
+        // If we have multiple solutions, pick a different one
+        do {
+            new_solution_index = (unsigned)(rand() % g->admin.total_solutions);
+        } while (new_solution_index == g->admin.current_solution_index && g->admin.total_solutions > 1);
+    } else {
+        // If only one solution or no solutions, use index 0
+        new_solution_index = 0;
+    }
+    
+    // Load the new solution
+    if (!board_load_solution(g->board, "latest-s-v0_0_9.json", new_solution_index)) {
+        fprintf(stderr, "Failed to load random solution %u during reset\n", new_solution_index);
+        // Fallback to regular reset if loading fails
+        if (!board_reset(g->board)) {
+            return false;
+        }
+    } else {
+        g->admin.current_solution_index = new_solution_index;
+        printf("Reset: Loaded random solution %u\n", new_solution_index);
     }
 
     clock_reset(g->clock);
     face_default(g->face);
+    g->game_over_info.is_game_over = false;  // Reset game over state
+    g->game_over_info.death_cause[0] = '\0'; // Clear death cause
 
     return true;
 }
@@ -236,6 +270,11 @@ void game_mouse_down(struct Game *g, int x, int y, Uint8 button) {
 bool game_mouse_up(struct Game *g, int x, int y, Uint8 button) {
     (void)button;
     
+    // Ignore board interactions during game over
+    if (g->game_over_info.is_game_over) {
+        return true;
+    }
+    
     // Check if click is in player panel first
     if (player_panel_handle_click(g->player_panel, x, y, g)) {
         return true;
@@ -280,8 +319,12 @@ bool game_events(struct Game *g) {
         case SDL_KEYDOWN:
             switch (g->event.key.keysym.scancode) {
             case SDL_SCANCODE_SPACE:
-                if (!game_reset(g))
-                    return false;
+                if (g->game_over_info.is_game_over) {
+                    game_reset_game_over(g);
+                } else {
+                    if (!game_reset(g))
+                        return false;
+                }
                 break;
             // case SDL_SCANCODE_Z:
             //     game_toggle_scale(g);
@@ -368,6 +411,9 @@ void game_draw(const struct Game *g) {
     board_draw(g->board);
     player_panel_draw(g->player_panel, &g->player);
 
+    // Draw game over popup if needed
+    game_draw_game_over_popup(g);
+
     SDL_RenderPresent(g->renderer);
 }
 
@@ -438,6 +484,8 @@ void game_update_player_health(struct Game *g, int health_change) {
     }
     
     printf("Player health: %u/%u\n", g->player.health, g->player.max_health);
+    
+    // Removed automatic game over check - will be handled explicitly in combat
 }
 
 void game_level_up_player(struct Game *g) {
@@ -454,14 +502,14 @@ void game_level_up_player(struct Game *g) {
 }
 
 unsigned game_calculate_max_health(unsigned level) {
-    if (level >= 1000) {
-        return 9999; // GOD mode health
+    if (level >= GOD_MODE_LEVEL) {
+        return GOD_MODE_HEALTH; // GOD mode health
     }
-    return 8 + (level * 2); // Base health + 2 per level
+    return BASE_HEALTH + (level * HEALTH_PER_LEVEL); // Base health + 2 per level
 }
 
 unsigned game_calculate_exp_requirement(unsigned level) {
-    return level * 5; // Simple exp curve: 5, 10, 15, 20, etc.
+    return level * EXP_PER_LEVEL_MULTIPLIER; // Simple exp curve: 5, 10, 15, 20, etc.
 }
 
 // ========== ADMIN PANEL FUNCTIONS ==========
@@ -485,13 +533,16 @@ void game_admin_god_mode(struct Game *g) {
     g->admin.god_mode_enabled = !g->admin.god_mode_enabled;
     
     if (g->admin.god_mode_enabled) {
-        g->player.level = 1000;
+        g->game_over_info.is_game_over = false;  // Reset game over state when entering god mode
+        g->game_over_info.death_cause[0] = '\0'; // Clear death cause
+        g->player.level = GOD_MODE_LEVEL;
         g->player.max_health = game_calculate_max_health(g->player.level);
         g->player.health = g->player.max_health;
         g->player.experience = 0;
         g->player.exp_to_next_level = game_calculate_exp_requirement(g->player.level);
         
-        printf("🔱 GOD MODE ACTIVATED! Player level set to 1000 with 9999 health!\n");
+        printf("🔱 GOD MODE ACTIVATED! Player level set to %u with %u health!\n", 
+               GOD_MODE_LEVEL, GOD_MODE_HEALTH);
         face_won(g->face); // Show winning face for GOD mode
     } else {
         g->player.level = 1;
@@ -538,6 +589,119 @@ void game_print_admin_help(void) {
     printf("  F4  - Load Next Map\n");
     printf("  F5  - Load Previous Map\n");
     printf("  F12 - Print this help\n");
+}
+
+// ========== GAME OVER FUNCTIONS ==========
+
+void game_check_game_over(struct Game *g) {
+    // Skip game over check if god mode is enabled
+    if (g->admin.god_mode_enabled) {
+        return;
+    }
+    
+    if (g->player.health <= 0 && !g->game_over_info.is_game_over) {
+        game_set_game_over(g, "Unknown"); // Default death cause if not specified
+    }
+}
+
+void game_set_game_over(struct Game *g, const char *entity_name) {
+    g->game_over_info.is_game_over = true;
+    
+    // Copy the entity name safely
+    if (entity_name) {
+        strncpy(g->game_over_info.death_cause, entity_name, MAX_ENTITY_NAME - 1);
+        g->game_over_info.death_cause[MAX_ENTITY_NAME - 1] = '\0'; // Ensure null termination
+    } else {
+        strcpy(g->game_over_info.death_cause, "Unknown");
+    }
+    
+    printf("=== GAME OVER ===\n");
+    printf("Death by %s! Press SPACE to restart.\n", g->game_over_info.death_cause);
+    face_lost(g->face);  // Set sad face
+}
+
+void game_draw_game_over_popup(const struct Game *g) {
+    if (!g->game_over_info.is_game_over) {
+        return;
+    }
+    
+    // Calculate popup dimensions - much smaller and centered
+    int popup_width = 200 * g->scale;
+    int popup_height = 80 * g->scale;
+    int popup_x = (g->board->rect.x + g->board->rect.w / 2) - (popup_width / 2);
+    int popup_y = (g->board->rect.y + g->board->rect.h / 2) - (popup_height / 2);
+    
+    // Draw semi-transparent overlay only around the popup area
+    SDL_SetRenderDrawBlendMode(g->renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 120);  // Semi-transparent black
+    SDL_Rect overlay = {
+        popup_x - 10 * g->scale, 
+        popup_y - 10 * g->scale, 
+        popup_width + 20 * g->scale, 
+        popup_height + 20 * g->scale
+    };
+    SDL_RenderFillRect(g->renderer, &overlay);
+    
+    // Draw popup background (light grey)
+    SDL_SetRenderDrawBlendMode(g->renderer, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(g->renderer, 220, 220, 220, 255);
+    SDL_Rect popup_bg = {popup_x, popup_y, popup_width, popup_height};
+    SDL_RenderFillRect(g->renderer, &popup_bg);
+    
+    // Draw popup border (black)
+    SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255);
+    SDL_RenderDrawRect(g->renderer, &popup_bg);
+    
+    // Draw inner border (white highlight)
+    SDL_SetRenderDrawColor(g->renderer, 255, 255, 255, 255);
+    SDL_Rect inner_border = {
+        popup_x + 1,
+        popup_y + 1,
+        popup_width - 2,
+        popup_height - 2
+    };
+    SDL_RenderDrawRect(g->renderer, &inner_border);
+    
+    // Draw death message
+    if (g->player_panel && g->player_panel->font) {
+        SDL_Color red = {180, 0, 0, 255};
+        SDL_Color black = {0, 0, 0, 255};
+        
+        int text_x = popup_x + 10 * g->scale;
+        int text_y = popup_y + 8 * g->scale;
+        
+        // Draw "GAME OVER" text
+        player_panel_draw_text(g->player_panel, "GAME OVER", 
+                              text_x, text_y, red);
+        
+        // Draw death cause message
+        char death_message[128];
+        snprintf(death_message, sizeof(death_message), "Death by %s", g->game_over_info.death_cause);
+        player_panel_draw_text(g->player_panel, death_message, 
+                              text_x, text_y + 18 * g->scale, black);
+        
+        // Draw restart instruction
+        player_panel_draw_text(g->player_panel, "Press SPACE to restart", 
+                              text_x, text_y + 36 * g->scale, black);
+    }
+    
+    // Reset render color
+    SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255);
+}
+
+void game_reset_game_over(struct Game *g) {
+    g->game_over_info.is_game_over = false;
+    g->game_over_info.death_cause[0] = '\0'; // Clear death cause
+    
+    // Reset player stats
+    game_init_player_stats(g);
+    
+    // Reset game board
+    if (!game_reset(g)) {
+        printf("Warning: Failed to reset game board\n");
+    }
+    
+    printf("Game restarted!\n");
 }
 
 // ========== PLAYER PANEL FUNCTIONS ==========

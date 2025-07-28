@@ -9,13 +9,15 @@
 // Entity data structure
 typedef struct {
     unsigned id;
-    char name[64];
-    char description[256];
+    char name[MAX_ENTITY_NAME];
+    char description[MAX_ENTITY_DESCRIPTION];
     unsigned level;
     unsigned count;
     bool is_enemy;
     bool is_treasure;
     bool blocks_input_on_reveal;
+    char tags[MAX_ENTITY_TAGS][MAX_TAG_LENGTH];
+    unsigned tag_count;
     struct {
         unsigned x;
         unsigned y;
@@ -24,7 +26,7 @@ typedef struct {
     // Entity transition data
     struct {
         unsigned next_entity_id;  // Entity ID to transition to when cleared
-        char sound[32];           // Sound effect to play
+        char sound[MAX_SOUND_NAME];           // Sound effect to play
     } transition;
 } Entity;
 
@@ -41,7 +43,7 @@ typedef struct {
 
 // Solution data
 typedef struct {
-    char uuid[64];
+    char uuid[MAX_UUID_LENGTH];
     unsigned **board;  // 2D array of entity IDs
     unsigned rows;
     unsigned cols;
@@ -49,6 +51,7 @@ typedef struct {
 
 bool config_load(GameConfig *config, const char *config_file);
 bool config_load_solution(SolutionData *solution, const char *solution_file, unsigned solution_index);
+unsigned config_count_solutions(const char *solution_file);
 void config_free(GameConfig *config);
 void config_free_solution(SolutionData *solution);
 Entity* config_get_entity(const GameConfig *config, unsigned entity_id);

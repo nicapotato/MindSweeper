@@ -269,14 +269,51 @@ static bool parse_wasm_entities(const char *content, GameConfig *config) {
             e->level = (unsigned)atoi(level_pos);
         }
         
-        // Check for enemy tag
-        if (strstr(entity_json, "\"enemy\"")) {
-            e->is_enemy = true;
-        }
+        // Parse tags array
+        e->tag_count = 0;
+        e->is_enemy = false;
+        e->is_treasure = false;
         
-        // Check for treasure tag
-        if (strstr(entity_json, "\"treasure\"")) {
-            e->is_treasure = true;
+        char *tags_pos = strstr(entity_json, "\"tags\":");
+        if (tags_pos) {
+            tags_pos = strchr(tags_pos, '[');
+            if (tags_pos) {
+                char *tags_end = strchr(tags_pos, ']');
+                if (tags_end) {
+                    // Extract tags array content
+                    size_t tags_len = (size_t)(tags_end - tags_pos + 1);
+                    char *tags_array = malloc(tags_len + 1);
+                    strncpy(tags_array, tags_pos, tags_len);
+                    tags_array[tags_len] = '\0';
+                    
+                    // Parse individual tags
+                    char *tag_start = tags_array;
+                    while ((tag_start = strchr(tag_start, '"')) != NULL && e->tag_count < MAX_ENTITY_TAGS) {
+                        tag_start++; // Skip opening quote
+                        char *tag_end = strchr(tag_start, '"');
+                        if (!tag_end) break;
+                        
+                        size_t tag_len = (size_t)(tag_end - tag_start);
+                        if (tag_len > 0 && tag_len < MAX_TAG_LENGTH) {
+                            strncpy(e->tags[e->tag_count], tag_start, tag_len);
+                            e->tags[e->tag_count][tag_len] = '\0';
+                            
+                            // Set compatibility flags
+                            if (strcmp(e->tags[e->tag_count], "enemy") == 0) {
+                                e->is_enemy = true;
+                            } else if (strcmp(e->tags[e->tag_count], "treasure") == 0) {
+                                e->is_treasure = true;
+                            }
+                            
+                            e->tag_count++;
+                        }
+                        
+                        tag_start = tag_end + 1;
+                    }
+                    
+                    free(tags_array);
+                }
+            }
         }
         
         // Parse sprite position (look for first x and y in revealed section)
@@ -350,6 +387,9 @@ bool config_load(GameConfig *config, const char *config_file) {
         config->entities = calloc(1, sizeof(Entity));
         config->entities[0].id = 0;
         strcpy(config->entities[0].name, "Empty");
+        config->entities[0].tag_count = 0;
+        config->entities[0].is_enemy = false;
+        config->entities[0].is_treasure = false;
         return true;
     }
     
@@ -397,6 +437,9 @@ bool config_load(GameConfig *config, const char *config_file) {
         strcpy(config->entities[0].description, "An empty tile");
         config->entities[0].sprite_pos.x = 3;
         config->entities[0].sprite_pos.y = 4;
+        config->entities[0].tag_count = 0;
+        config->entities[0].is_enemy = false;
+        config->entities[0].is_treasure = false;
         
         // Entity 1: Cave Rat
         config->entities[1].id = 1;
@@ -408,6 +451,9 @@ bool config_load(GameConfig *config, const char *config_file) {
         config->entities[1].sprite_pos.y = 0;
         config->entities[1].transition.next_entity_id = 0;
         strcpy(config->entities[1].transition.sound, "crystal");
+        config->entities[1].tag_count = 1;
+        strcpy(config->entities[1].tags[0], "enemy");
+        config->entities[1].is_treasure = false;
     }
     
     free(content);
@@ -596,17 +642,29 @@ bool config_load(GameConfig *config, const char *config_file) {
             e->level = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(entity, "level"));
             e->count = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(entity, "count"));
             
-            // Parse tags to determine entity type
+            // Parse tags array
+            e->tag_count = 0;
+            e->is_enemy = false;
+            e->is_treasure = false;
+            
             cJSON *tags = cJSON_GetObjectItem(entity, "tags");
             if (tags) {
                 int tag_count = cJSON_GetArraySize(tags);
-                for (int j = 0; j < tag_count; j++) {
+                for (int j = 0; j < tag_count && e->tag_count < MAX_ENTITY_TAGS; j++) {
                     cJSON *tag = cJSON_GetArrayItem(tags, j);
                     const char *tag_str = cJSON_GetStringValue(tag);
-                    if (strcmp(tag_str, "enemy") == 0) {
-                        e->is_enemy = true;
-                    } else if (strcmp(tag_str, "treasure") == 0) {
-                        e->is_treasure = true;
+                    if (tag_str && strlen(tag_str) < MAX_TAG_LENGTH) {
+                        strncpy(e->tags[e->tag_count], tag_str, MAX_TAG_LENGTH - 1);
+                        e->tags[e->tag_count][MAX_TAG_LENGTH - 1] = '\0';
+                        
+                        // Set compatibility flags
+                        if (strcmp(tag_str, "enemy") == 0) {
+                            e->is_enemy = true;
+                        } else if (strcmp(tag_str, "treasure") == 0) {
+                            e->is_treasure = true;
+                        }
+                        
+                        e->tag_count++;
                     }
                 }
             }
@@ -748,4 +806,49 @@ Entity* config_get_entity(const GameConfig *config, unsigned entity_id) {
         }
     }
     return NULL;
-} 
+}
+
+unsigned config_count_solutions(const char *solution_file) {
+#ifdef WASM_BUILD
+    char *content = read_file_contents_wasm(solution_file);
+    if (!content) {
+        printf("WASM: Failed to read solution file for counting\n");
+        return 0;
+    }
+    
+    // Count occurrences of "uuid" to count solutions (each solution has one uuid)
+    unsigned count = 0;
+    char *pos = content;
+    while ((pos = strstr(pos, "\"uuid\"")) != NULL) {
+        count++;
+        pos += 6; // Move past "uuid"
+    }
+    
+    free(content);
+    return count;
+#else
+    char *content = read_file_contents(solution_file);
+    if (!content) {
+        return 0;
+    }
+    
+    cJSON *json = cJSON_Parse(content);
+    free(content);
+    
+    if (!json) {
+        fprintf(stderr, "Failed to parse JSON solution for counting\n");
+        return 0;
+    }
+    
+    if (!cJSON_IsArray(json)) {
+        fprintf(stderr, "Solution file is not an array\n");
+        cJSON_Delete(json);
+        return 0;
+    }
+    
+    int solution_count = cJSON_GetArraySize(json);
+    cJSON_Delete(json);
+    
+    return (unsigned)solution_count;
+#endif
+}

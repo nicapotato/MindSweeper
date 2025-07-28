@@ -16,6 +16,12 @@ typedef struct {
     unsigned exp_to_next_level;
 } PlayerStats;
 
+// Game over information
+typedef struct {
+    bool is_game_over;
+    char death_cause[MAX_ENTITY_NAME];  // Name of entity that killed player
+} GameOverInfo;
+
 // Player panel for displaying stats
 typedef struct {
     SDL_Renderer *renderer;
@@ -49,6 +55,7 @@ struct Game {
         PlayerStats player;
         AdminPanel admin;
         bool is_running;
+        GameOverInfo game_over_info;  // Replaced simple boolean with detailed info
         unsigned rows;
         unsigned columns;
         int scale;
@@ -81,5 +88,11 @@ void player_panel_set_size(PlayerPanel *p, unsigned columns);
 void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats);
 bool player_panel_handle_click(PlayerPanel *p, int x, int y, struct Game *g);
 void player_panel_draw_text(const PlayerPanel *p, const char *text, int x, int y, SDL_Color color);
+
+// Game over functions
+void game_check_game_over(struct Game *g);
+void game_set_game_over(struct Game *g, const char *entity_name);
+void game_draw_game_over_popup(const struct Game *g);
+void game_reset_game_over(struct Game *g);
 
 #endif

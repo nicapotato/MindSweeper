@@ -1,6 +1,11 @@
 #include "game.h"
+#include <time.h>
+#include <stdlib.h>
 
 int main(void) {
+    // Initialize random seed
+    srand((unsigned)time(NULL));
+    
     bool exit_status = EXIT_FAILURE;
 
     struct Game *game = NULL;

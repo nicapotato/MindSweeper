@@ -72,9 +72,29 @@ struct Pos {
         int column;
 };
 
+/**
+ * @brief Create a new game board
+ * @param board Double pointer to store the allocated board
+ * @param renderer SDL renderer for graphics
+ * @param rows Number of rows in the board
+ * @param columns Number of columns in the board
+ * @param scale Scaling factor for display
+ * @return true on success, false on failure
+ */
 bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
                unsigned columns, int scale);
+
+/**
+ * @brief Free a board and all associated resources
+ * @param board Double pointer to the board (set to NULL after freeing)
+ */
 void board_free(struct Board **board);
+
+/**
+ * @brief Reset the board to initial state
+ * @param b Pointer to the board
+ * @return true on success, false on failure
+ */
 bool board_reset(struct Board *b);
 void board_set_scale(struct Board *b, int scale);
 void board_set_theme(struct Board *b, unsigned theme);

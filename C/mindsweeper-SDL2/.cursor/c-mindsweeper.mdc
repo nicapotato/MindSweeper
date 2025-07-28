@@ -1,6 +1,102 @@
----
-description:
-globs:
-alwaysApply: false
----
 
+Test program starts:
+./minesweeper > game_output.log 2>&1 & sleep 3; pkill minesweeper; cat game_output.log && rm game_output.log
+
+Use Makefile:
+
+make clean
+make run (run on local mac)
+make wasm
+make serve (wasm)
+
+Code rules:
+- Do not support "legacy code", this introduces complexity and confusion
+- Fail loud and early using assert. Do not use fallback values hardcoded in the code, this also leads to confusion and missing bugs during development
+- Do not over-engineer
+
+# MindSweeper RPG - File Architecture Overview
+
+## Core Game Files
+
+### main.c/h
+- **Entry point** of the application
+- Contains main() function that initializes, runs, and cleans up the game
+- **main.h** defines all SDL includes, constants, window dimensions, sprite definitions, and game configuration values
+
+### game.c/h 
+- **Central game controller** and main game loop
+- Manages player stats (level, health, experience, leveling up)
+- Handles **admin panel** functionality (god mode, reveal all tiles, map loading)
+- Contains **player panel** UI system for displaying stats and level-up button
+- Manages SDL events, input handling, and game state updates
+- Coordinates all game subsystems (board, clock, face, etc.)
+
+## Game Board System
+
+### board.c/h
+- **Core game board logic** - manages the 2D grid of tiles
+- Handles **tile states** (hidden/revealed) and **entity placement** on tiles
+- Implements **animation system** for tile reveals, combat, treasure collection
+- Loads and manages **sprite sheets** for entities and tile variations
+- Provides functions for tile state queries, entity management, and visual rendering
+- Contains admin functions like "reveal all tiles"
+
+### board_click.c/h
+- **Handles user clicks** on board tiles
+- Implements **combat logic** when clicking on enemy entities
+- Manages **tile revealing** animations and state transitions
+- Processes **enemy encounters** (damage player, gain experience)
+- Handles **treasure collection** and entity interactions
+
+## Configuration & Data Management
+
+### config.c/h
+- **JSON configuration loading** for game entities and solutions
+- Defines **Entity structure** (enemies, treasures, empty tiles) with stats, sprites, transitions
+- Loads **game maps/solutions** from JSON files
+- Handles both **WASM and native builds** with different parsing implementations
+- Manages entity lookup and game configuration data
+
+## SDL Graphics & Media
+
+### init_sdl.c/h
+- **SDL initialization** - sets up window, renderer, image loading, TTF fonts
+- Creates game window with icon and proper graphics context
+
+### load_media.c/h
+- **Sprite sheet loading utility** - loads images and creates sprite rectangles
+- Handles texture creation from image files
+- Calculates sprite source rectangles for rendering
+
+## UI Components
+
+### border.c/h
+- **Decorative border rendering** around the game area
+- Classic minesweeper-style raised/lowered border graphics
+- Supports themes and scaling
+
+### clock.c/h
+- **Game timer display** - shows elapsed time in classic digital format
+- Manages time counting and digit rendering
+- Classic minesweeper timer component
+
+### face.c/h
+- **Smiley face button** - classic minesweeper reset button
+- Shows different expressions (normal, pressed, won, lost)
+- Handles mouse clicks for game reset
+
+### mines.c/h
+- **Mine counter display** (repurposed for RPG elements)
+- Shows 3-digit numbers in classic minesweeper style
+- Could be used for health, score, or other numeric displays
+
+## Game Features
+
+This is an **RPG variation of minesweeper** that includes:
+- **Player progression system** (levels, health, experience)
+- **Entity-based gameplay** (enemies, treasures, empty tiles)
+- **Combat mechanics** when revealing enemy tiles
+- **Animation system** for smooth tile transitions
+- **Admin panel** for debugging and testing
+- **Solution/map loading** from JSON configuration files
+- **Multiple game maps** that can be loaded dynamically

@@ -465,7 +465,7 @@
             "symbol": "H",
             "level": 0,
             "count": 3,
-            "tags": ["treasure", "onReveal-neutral", "revealed-click-claim"],
+            "tags": ["treasure", "heal-8"],
             "entity_transition": {
                 "on_cleared": {
                     "entity_id": 0,

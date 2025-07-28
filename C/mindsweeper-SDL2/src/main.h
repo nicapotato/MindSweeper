@@ -52,4 +52,35 @@
 #define SPRITE_CLEARED 2
 #define SPRITE_MAX_INDEX 255
 
+// Game configuration constants
+#define DEFAULT_BOARD_ROWS 10
+#define DEFAULT_BOARD_COLS 14
+#define DEFAULT_SCALE 2
+
+// Animation constants
+#define ANIM_REVEALING_DURATION_MS 800
+#define ANIM_COMBAT_DURATION_MS 500
+#define ANIM_TREASURE_DURATION_MS 300
+
+// Player progression constants
+#define BASE_HEALTH 8
+#define HEALTH_PER_LEVEL 2
+#define EXP_PER_LEVEL_MULTIPLIER 5
+#define GOD_MODE_LEVEL 1000
+#define GOD_MODE_HEALTH 9999
+
+// Tile variation constants
+#define MIN_TILE_VARIATION 5
+#define MAX_TILE_VARIATION 7
+#define NUM_TILE_ROTATIONS 4
+
+// String buffer sizes
+#define MAX_ENTITY_NAME 64
+#define MAX_ENTITY_DESCRIPTION 256
+#define MAX_UUID_LENGTH 64
+#define MAX_SOUND_NAME 32
+#define MAX_TITLE_LENGTH 256
+#define MAX_ENTITY_TAGS 10
+#define MAX_TAG_LENGTH 32
+
 #endif
