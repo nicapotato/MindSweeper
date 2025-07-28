@@ -307,12 +307,25 @@ void board_start_animation(struct Board *b, unsigned row, unsigned col,
                    anim->start_sprite, anim->end_sprite);
             break;
         case ANIM_COMBAT:
-        case ANIM_DYING:
-        case ANIM_TREASURE_CLAIM:
-        case ANIM_ENTITY_TRANSITION:
+            // Stage 1: Show entity sprite for 0.5s
             anim->start_sprite = get_entity_sprite_index(entity_id, tile_state);
             anim->end_sprite = get_entity_sprite_index(entity_id, tile_state);
             break;
+        case ANIM_COMBAT_STAGE2:
+            // Stage 2: Show sprite x:2, y:0 (combat effect sprite)
+            // Assuming 4 sprites per row: x:2, y:0 = index 2
+            anim->start_sprite = 2; // x:2, y:0 = index 2
+            anim->end_sprite = 2;
+            break;
+        case ANIM_DYING:
+        case ANIM_TREASURE_CLAIM:
+        case ANIM_ENTITY_TRANSITION: {
+            // Show the new entity that we're transitioning to
+            unsigned new_entity_id = b->entity_ids[index];
+            anim->start_sprite = get_entity_sprite_index(new_entity_id, tile_state);
+            anim->end_sprite = get_entity_sprite_index(new_entity_id, tile_state);
+            break;
+        }
         default:
             anim->start_sprite = b->display_sprites[index];
             anim->end_sprite = b->display_sprites[index];
@@ -362,6 +375,31 @@ void board_update_animations(struct Board *b) {
 void board_finish_animation(struct Board *b, unsigned row, unsigned col) {
     size_t index = (size_t)(row * b->columns + col);
     TileAnimation *anim = &b->animations[index];
+    
+    // Handle multi-stage animations
+    if (anim->type == ANIM_COMBAT) {
+        // Combat stage 1 finished, start stage 2
+        printf("Combat stage 1 finished, starting stage 2 at [%u,%u]\n", row, col);
+        board_start_animation(b, row, col, ANIM_COMBAT_STAGE2, 500, false);
+        return;
+    } else if (anim->type == ANIM_COMBAT_STAGE2) {
+        // Combat stage 2 finished, transition to next entity
+        printf("Combat stage 2 finished, transitioning entity at [%u,%u]\n", row, col);
+        
+        // Get current entity to determine transition
+        unsigned current_entity_id = b->entity_ids[index];
+        Entity *entity = config_get_entity(&g_config, current_entity_id);
+        
+        if (entity && entity->transition.next_entity_id != current_entity_id) {
+            // Transition to next entity
+            board_set_entity_id(b, row, col, entity->transition.next_entity_id);
+            board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false);
+        } else {
+            // No transition, just clear animation
+            anim->type = ANIM_NONE;
+        }
+        return;
+    }
     
     // Set final sprite
     b->display_sprites[index] = anim->end_sprite;

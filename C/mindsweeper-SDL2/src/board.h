@@ -11,6 +11,7 @@ typedef enum {
     ANIM_NONE = 0,
     ANIM_REVEALING,          // Hidden -> showing entity (0.8s)
     ANIM_COMBAT,             // Fight animation (0.5s)
+    ANIM_COMBAT_STAGE2,      // Combat stage 2: show sprite x:2, y:0 (0.5s)
     ANIM_DYING,              // Death animation (0.3s)
     ANIM_TREASURE_CLAIM,     // Treasure collection (0.3s)
     ANIM_ENTITY_TRANSITION   // Entity -> new entity/empty (0.5s)

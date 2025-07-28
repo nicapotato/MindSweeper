@@ -34,6 +34,8 @@ bool config_load(GameConfig *config, const char *config_file) {
     config->entities[1].is_enemy = true;
     config->entities[1].sprite_pos.x = 0;
     config->entities[1].sprite_pos.y = 3;
+    config->entities[1].transition.next_entity_id = 0; // Transition to empty
+    strcpy(config->entities[1].transition.sound, "crystal");
     
     printf("WASM: Loaded hardcoded config with %u entities\n", config->entity_count);
     return true;
@@ -176,6 +178,20 @@ bool config_load(GameConfig *config, const char *config_file) {
                 if (revealed) {
                     e->sprite_pos.x = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(revealed, "x"));
                     e->sprite_pos.y = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(revealed, "y"));
+                }
+            }
+            
+            // Parse entity transition
+            cJSON *entity_transition = cJSON_GetObjectItem(entity, "entity_transition");
+            if (entity_transition) {
+                cJSON *on_cleared = cJSON_GetObjectItem(entity_transition, "on_cleared");
+                if (on_cleared) {
+                    e->transition.next_entity_id = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(on_cleared, "entity_id"));
+                    
+                    cJSON *sound = cJSON_GetObjectItem(on_cleared, "sound");
+                    if (sound) {
+                        strncpy(e->transition.sound, cJSON_GetStringValue(sound), sizeof(e->transition.sound) - 1);
+                    }
                 }
             }
         }

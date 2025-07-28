@@ -20,6 +20,12 @@ typedef struct {
         unsigned x;
         unsigned y;
     } sprite_pos;
+    
+    // Entity transition data
+    struct {
+        unsigned next_entity_id;  // Entity ID to transition to when cleared
+        char sound[32];           // Sound effect to play
+    } transition;
 } Entity;
 
 // Game configuration
