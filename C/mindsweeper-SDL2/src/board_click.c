@@ -167,80 +167,105 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
         printf("none");
     }
     printf("\n");
-    
-
-    // Handle enemy combat regardless of tile state (hidden or revealed)
     if (entity && entity->level > 0) {
-        // Enemy combat sequence
         game_update_player_health(g, -(int)entity->level);  // Use safer health update function
         g->player.experience += entity->level;
-        
-        printf("Combat with enemy %s (ID: %u) - Player HP: %u, XP: %u\n", 
-               entity->name, entity->id, g->player.health, g->player.experience);
-        
-        // IMMEDIATELY mark entity as dead (level 0) for threat calculation updates
         board_mark_entity_dead(g->board, row, col);
-        printf("Enemy %s marked as dead - threat levels updated instantly\n", entity->name);
-        
         // Check if player died from this combat - do this AFTER health update but BEFORE animations
         if (g->player.health <= 0 && !g->game_over_info.is_game_over) {
             game_set_game_over(g, entity->name);  // Pass the enemy name that killed the player
             return true;  // Exit early to prevent further processing
         }
-        
         if (current_state == TILE_HIDDEN) {
-            // 1. IMMEDIATE logical state update (like JS)
             board_set_tile_state(g->board, row, col, TILE_REVEALED);
         }
-
-        // Start combat animation sequence (will handle entity transition automatically)
         board_start_animation(g->board, row, col, ANIM_COMBAT, ANIM_COMBAT_DURATION_MS, false);
-
-        return true; // Combat handled, no further processing needed
+        return true;
     } else if (current_state == TILE_HIDDEN) {
-        // Reveal tile
-        printf("Revealing tile [%u,%u] with entity %u\n", row, col, entity_id);
-        
-        // Get entity info for debug
         if (entity) {
             printf("  Entity: %s (ID: %u, Level: %u)\n", entity->name, entity->id, entity->level);
             printf("  Sprite position: x=%u, y=%u\n", entity->sprite_pos.x, entity->sprite_pos.y);
         }
-        
-        // 1. IMMEDIATE logical state update (like JS)
         board_set_tile_state(g->board, row, col, TILE_REVEALED);
-        
-        // 2. Start visual animation
         board_start_animation(g->board, row, col, ANIM_REVEALING, ANIM_REVEALING_DURATION_MS, false); // 0.8s reveal
         
         return true;
     } else {
-        // Tile already revealed - handle combat/treasure/etc
-
         if (entity) {
-            printf("Clicking revealed tile [%u,%u]:\n", row, col);
             if (entity->is_item) {
-                // Start treasure claim animation  
-                // Check for heal tag in entity tags - can handle multi-digit numbers like "heal-10"
                 for (unsigned i = 0; i < entity->tag_count; i++) {
-                    if (strncmp(entity->tags[i], "heal-", 5) == 0) {
-                        // Parse the number after "heal-" (e.g., "8" from "heal-8" or "10" from "heal-10")
+                    if (strncmp(entity->tags[i], "heal-", 5) == 0) {                        
                         int heal_amount = atoi(&entity->tags[i][5]);
-                        if (heal_amount > 0) {
-                            game_update_player_health(g, heal_amount);
-                            printf("Player healed for %d HP. New HP: %u\n", heal_amount, g->player.health);
-                        }
-                        break; // Found heal tag, no need to check others
+                        game_update_player_health(g, heal_amount);
                     }
                     if (strncmp(entity->tags[i], "reward-experience=", 18) == 0) {
                         int experience_amount = atoi(&entity->tags[i][18]);
-                        if (experience_amount > 0) {
-                            printf("Experience added - %d. New XP: %u\n", experience_amount, g->player.experience + experience_amount);
-                            g->player.experience += experience_amount;
+                        g->player.experience += experience_amount;
+                    }
+                    if (strncmp(entity->tags[i], "board-effect", 12) == 0) {
+                        for (unsigned j = 0; j < entity->tag_count; j++) {
+                            if (strncmp(entity->tags[j], "trigger-reveal-E1", 17) == 0) {
+                                unsigned revealed_count = 0;
+                                for (unsigned r = 0; r < g->board->rows; r++) {
+                                    for (unsigned c = 0; c < g->board->columns; c++) {
+                                        TileState tile_state = board_get_tile_state(g->board, r, c);
+                                        unsigned tile_entity_id = board_get_entity_id(g->board, r, c);
+                                        if (tile_state == TILE_HIDDEN && tile_entity_id == 1) {
+                                            board_set_tile_state(g->board, r, c, TILE_REVEALED);
+                                            size_t index = (size_t)(r * g->board->columns + c);
+                                            g->board->display_sprites[index] = get_entity_sprite_index(tile_entity_id, TILE_REVEALED);
+                                            g->board->animations[index].type = ANIM_NONE;
+                                            revealed_count++;
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                            if (strncmp(entity->tags[j], "trigger-weakening-E7", 20) == 0) {
+                                printf("🔸 WEAKENING TRIGGER ACTIVATED! 🔸\n");
+                                // Transform all Entity 7 tiles to Entity 25 (weakened mines)
+                                unsigned weakened_count = 0;
+                                for (unsigned r = 0; r < g->board->rows; r++) {
+                                    for (unsigned c = 0; c < g->board->columns; c++) {
+                                        unsigned tile_entity_id = board_get_entity_id(g->board, r, c);
+                                        
+                                        if (tile_entity_id == 7) {
+                                            // Transform Entity 7 to Entity 25 (weakened mine)
+                                            board_set_entity_id(g->board, r, c, 25);
+                                            
+                                            // Update display sprite immediately
+                                            size_t index = (size_t)(r * g->board->columns + c);
+                                            TileState tile_state = board_get_tile_state(g->board, r, c);
+                                            g->board->display_sprites[index] = get_entity_sprite_index(25, tile_state);
+                                            
+                                            weakened_count++;
+                                            printf("Transformed mine at [%u,%u] from Entity 7 to Entity 25\n", r, c);
+                                        }
+                                    }
+                                }
+                                printf("🔸 Weakening complete! Transformed %u mines to Entity 25 🔸\n", weakened_count);
+                                break;
+                            }
                         }
+                        break;
+                    }
+                    if (strncmp(entity->tags[i], "trigger-weakening-E7", 20) == 0) {
+                        unsigned weakened_count = 0;
+                        for (unsigned r = 0; r < g->board->rows; r++) {
+                            for (unsigned c = 0; c < g->board->columns; c++) {
+                                unsigned tile_entity_id = board_get_entity_id(g->board, r, c);
+                                if (tile_entity_id == 7) {
+                                    board_set_entity_id(g->board, r, c, 25);
+                                    size_t index = (size_t)(r * g->board->columns + c);
+                                    TileState tile_state = board_get_tile_state(g->board, r, c);
+                                    g->board->display_sprites[index] = get_entity_sprite_index(25, tile_state);
+                                    weakened_count++;
+                                }
+                            }
+                        }
+                        break;
                     }
                 }
-                // Start treasure claim animation - this will handle the entity transition
                 board_start_animation(g->board, row, col, ANIM_TREASURE_CLAIM, ANIM_TREASURE_DURATION_MS, false);
             }
         }

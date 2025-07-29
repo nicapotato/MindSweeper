@@ -45,31 +45,6 @@
         }
     },
     
-    "python_constants": {
-        "named_constants": {
-            "EMPTY": 0,
-            "CAVE_RAT": 1,
-            "SHADOW_BAT": 2,
-            "UNDEAD_SKELETON": 3,
-            "STONE_GARGOYLE": 4,
-            "CRIMSON_OOZE": 5,
-            "TEMPLE_GUARDIAN": 6,
-            "EXPLOSIVE_MINE": 7,
-            "TREASURE_CHEST": 8,
-            "HEALTH_ELIXIR": 9,
-            "RAT_KING": 10,
-            "ENCHANTED_SPYGLASS": 11,
-            "MYSTERIOUS_MAN": 12,
-            "ANCIENT_DRAGON": 13,
-            "STONE_BARRIER": 14,
-            "CRYSTALS": 15,
-            "ONYX_MONOLITH": 16,
-            "TREASURE_MIMIC": 17,
-            "TOME_OF_CRYSTAL_RESONANCE": 18,
-            "DRAGONS_VICTORY_CROWN": 24
-        }
-    },
-    
     "entities": [
         {
             "id": 0,
@@ -91,7 +66,7 @@
             "symbol": "r",
             "level": 1,
             "count": 16,
-            "tags": ["enemy", "onReveal-hostile", "E1"],
+            "tags": ["enemy"],
             "entity_transition": {
                 "on_cleared": {
                     "entity_id": 0,
@@ -135,7 +110,7 @@
             "symbol": "b",
             "level": 2,
             "count": 14,
-            "tags": ["enemy", "onReveal-hostile"],
+            "tags": ["enemy"],
             "entity_transition": {
                 "on_cleared": {
                     "type": "random_choice",
@@ -191,7 +166,7 @@
             "symbol": "s",
             "level": 3,
             "count": 14,
-            "tags": ["enemy", "onReveal-hostile"],
+            "tags": ["enemy"],
             "entity_transition": {
                 "on_cleared": {
                     "entity_id": 0,
@@ -235,7 +210,7 @@
             "symbol": "g",
             "level": 4,
             "count": 8,
-            "tags": ["enemy", "onReveal-hostile"],
+            "tags": ["enemy"],
             "entity_transition": {
                 "on_cleared": {
                     "entity_id": 0,
@@ -279,7 +254,7 @@
             "symbol": "o",
             "level": 5,
             "count": 6,
-            "tags": ["enemy", "onReveal-hostile"],
+            "tags": ["enemy"],
             "entity_transition": {
                 "on_cleared": {
                     "entity_id": 0,
@@ -327,7 +302,7 @@
             "symbol": "6",
             "level": 6,
             "count": 5,
-            "tags": ["enemy", "onReveal-hostile"],
+            "tags": ["enemy"],
             "entity_transition": {
                 "on_cleared": {
                     "entity_id": 0,
@@ -371,7 +346,7 @@
             "symbol": "*",
             "level": 100,
             "count": 9,
-            "tags": ["enemy", "onReveal-hostile"],
+            "tags": ["enemy"],
             "entity_transition": {
                 "on_cleared": {
                     "entity_id": 0,
@@ -500,7 +475,7 @@
             "symbol": "K",
             "level": 5,
             "count": 1,
-            "tags": ["enemy", "onReveal-hostile", "trigger-E1-reveal", "E1"],
+            "tags": ["enemy", "trigger-reveal-E1"],
             "content_transitions": ["ALIVE_TO_DYING", "DYING_TO_DEAD"],
             "entity_transition": {
                 "on_cleared": {
@@ -582,7 +557,7 @@
             "symbol": "M",
             "level": 14,
             "count": 1,
-            "tags": ["enemy", "onReveal-hostile"],
+            "tags": ["enemy"],
             "content_transitions": ["ALIVE_TO_DYING", "DYING_TO_DEAD"],
             "entity_transition": {
                 "on_cleared": {
@@ -628,7 +603,7 @@
             "symbol": "D",
             "level": 16,
             "count": 1,
-            "tags": ["enemy", "onReveal-hostile"],
+            "tags": ["enemy"],
             "content_transitions": ["ALIVE_TO_DYING", "DYING_TO_DEAD"],
             "entity_transition": {
                 "on_cleared": {
@@ -812,7 +787,7 @@
             "symbol": "7S",
             "level": 0,
             "count": 0,
-            "tags": ["item", "trigger-E1-reveal", "revealed-click-claim"],
+            "tags": ["board-effect", "item", "trigger-reveal-E1"],
             "content_transitions": ["ALIVE_TO_CLAIMED"],
             "entity_transition": {
                 "on_cleared": {
@@ -832,7 +807,7 @@
             "symbol": "8S",
             "level": 0,
             "count": 0,
-            "tags": ["item", "trigger-E7-weakening", "revealed-click-claim"],
+            "tags": ["item", "trigger-weakening-E7"],
             "content_transitions": ["ALIVE_TO_CLAIMED"],
             "entity_transition": {
                 "on_cleared": {
@@ -908,7 +883,7 @@
             "symbol": "*",
             "level": 5,
             "count": 0,
-            "tags": ["enemy", "onReveal-hostile"],
+            "tags": ["enemy"],
             "entity_transition": {
                 "on_cleared": {
                     "entity_id": 0,
@@ -978,6 +953,51 @@
                     "name": "Supreme Cat Crown",
                     "description": "The legendary crown of the Ancient Meeoeomoower, marking you as the supreme cat overlord.",
                     "level": 0
+                }
+            }
+        },
+        {
+            "id": 25,
+            "name": "Weakened Mine",
+            "description": "A deadly trap left by previous explorers.",
+            "symbol": "*",
+            "level": 5,
+            "count": 9,
+            "tags": ["enemy"],
+            "entity_transition": {
+                "on_cleared": {
+                    "entity_id": 0,
+                    "sound": "crystal"
+                }
+            },
+            "sprites": {
+                "revealed": {"x": 1, "y": 11, "sprite_sheet": "new_sprites"},
+                "revealed-weakened": {"x": 1, "y": 11, "sprite_sheet": "new_sprites"}
+            },
+            "theme_overrides": {
+                "rough": {
+                    "name": "Explosive Mine",
+                    "description": "A deadly trap left by previous explorers. One wrong step and it's over.",
+                    "level": 5,
+                    "sprite_override": {
+                        "revealed": {"x": 0, "y": 11, "sprite_sheet": "new_sprites"}
+                    }
+                },
+                "dragons": {
+                    "name": "Dragon Trap",
+                    "description": "An explosive device crafted by dragon-hunters. Ironically, now it serves the dragons.",
+                    "level": 5,
+                    "sprite_override": {
+                        "revealed": {"x": 0, "y": 11, "sprite_sheet": "new_sprites"}
+                    }
+                },
+                "cats": {
+                    "name": "Laced Catnip",
+                    "description": "Lethal Psychedelic Overload",
+                    "level": 5,
+                    "sprite_override": {
+                        "revealed": {"x": 0, "y": 11, "sprite_sheet": "new_sprites"}
+                    }
                 }
             }
         }
