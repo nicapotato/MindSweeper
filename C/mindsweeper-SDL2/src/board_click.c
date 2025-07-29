@@ -151,7 +151,7 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
     printf("  Level: %u\n", entity->level);
     printf("  Count: %u\n", entity->count);
     printf("  Is Enemy: %s\n", entity->is_enemy ? "true" : "false");
-    printf("  Is Treasure: %s\n", entity->is_treasure ? "true" : "false");
+    printf("  Is Item: %s\n", entity->is_item ? "true" : "false");
     printf("  Blocks Input on Reveal: %s\n", entity->blocks_input_on_reveal ? "true" : "false");
     printf("  Sprite Position: x=%u, y=%u\n", entity->sprite_pos.x, entity->sprite_pos.y);
     printf("  Tags (%u): ", entity->tag_count);
@@ -214,7 +214,7 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
 
         if (entity) {
             printf("Clicking revealed tile [%u,%u]:\n", row, col);
-            if (entity->is_treasure) {
+            if (entity->is_item) {
                 // Start treasure claim animation  
                 // Check for heal tag in entity tags - can handle multi-digit numbers like "heal-10"
                 for (unsigned i = 0; i < entity->tag_count; i++) {
@@ -226,6 +226,13 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
                             printf("Player healed for %d HP. New HP: %u\n", heal_amount, g->player.health);
                         }
                         break; // Found heal tag, no need to check others
+                    }
+                    if (strncmp(entity->tags[i], "reward-experience=", 18) == 0) {
+                        int experience_amount = atoi(&entity->tags[i][18]);
+                        if (experience_amount > 0) {
+                            printf("Experience added - %d. New XP: %u\n", experience_amount, g->player.experience + experience_amount);
+                            g->player.experience += experience_amount;
+                        }
                     }
                 }
                 // Start treasure claim animation - this will handle the entity transition

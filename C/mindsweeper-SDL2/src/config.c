@@ -272,7 +272,7 @@ static bool parse_wasm_entities(const char *content, GameConfig *config) {
         // Parse tags array
         e->tag_count = 0;
         e->is_enemy = false;
-        e->is_treasure = false;
+        e->is_item = false;
         
         char *tags_pos = strstr(entity_json, "\"tags\":");
         if (tags_pos) {
@@ -301,8 +301,8 @@ static bool parse_wasm_entities(const char *content, GameConfig *config) {
                             // Set compatibility flags
                             if (strcmp(e->tags[e->tag_count], "enemy") == 0) {
                                 e->is_enemy = true;
-                            } else if (strcmp(e->tags[e->tag_count], "treasure") == 0) {
-                                e->is_treasure = true;
+                            } else if (strcmp(e->tags[e->tag_count], "item") == 0) {
+                                e->is_item = true;
                             }
                             
                             e->tag_count++;
@@ -389,7 +389,7 @@ bool config_load(GameConfig *config, const char *config_file) {
         strcpy(config->entities[0].name, "Empty");
         config->entities[0].tag_count = 0;
         config->entities[0].is_enemy = false;
-        config->entities[0].is_treasure = false;
+        config->entities[0].is_item = false;
         return true;
     }
     
@@ -439,7 +439,7 @@ bool config_load(GameConfig *config, const char *config_file) {
         config->entities[0].sprite_pos.y = 4;
         config->entities[0].tag_count = 0;
         config->entities[0].is_enemy = false;
-        config->entities[0].is_treasure = false;
+        config->entities[0].is_item = false;
         
         // Entity 1: Cave Rat
         config->entities[1].id = 1;
@@ -453,7 +453,7 @@ bool config_load(GameConfig *config, const char *config_file) {
         strcpy(config->entities[1].transition.sound, "crystal");
         config->entities[1].tag_count = 1;
         strcpy(config->entities[1].tags[0], "enemy");
-        config->entities[1].is_treasure = false;
+        config->entities[1].is_item = false;
     }
     
     free(content);
@@ -645,7 +645,7 @@ bool config_load(GameConfig *config, const char *config_file) {
             // Parse tags array
             e->tag_count = 0;
             e->is_enemy = false;
-            e->is_treasure = false;
+            e->is_item = false;
             
             cJSON *tags = cJSON_GetObjectItem(entity, "tags");
             if (tags) {
@@ -660,8 +660,8 @@ bool config_load(GameConfig *config, const char *config_file) {
                         // Set compatibility flags
                         if (strcmp(tag_str, "enemy") == 0) {
                             e->is_enemy = true;
-                        } else if (strcmp(tag_str, "treasure") == 0) {
-                            e->is_treasure = true;
+                        } else if (strcmp(tag_str, "item") == 0) {
+                            e->is_item = true;
                         }
                         
                         e->tag_count++;

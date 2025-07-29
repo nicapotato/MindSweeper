@@ -32,7 +32,7 @@
             },
             "ALIVE_TO_CLAIMED": {
                 "triggers": ["revealed_click_claim"],
-                "conditions": ["treasure"],
+                "conditions": ["item"],
                 "animations": ["collect"],
                 "sound_effects": ["collect"]
             },
@@ -416,7 +416,7 @@
             "symbol": "C",
             "level": 0,
             "count": 4,
-            "tags": ["treasure", "revealed-click-claim"],
+            "tags": ["item", "revealed-click-claim"],
             "content_transitions": ["ALIVE_TO_CLAIMED"],
             "entity_transition": {
                 "on_cleared": {
@@ -465,7 +465,7 @@
             "symbol": "H",
             "level": 0,
             "count": 3,
-            "tags": ["treasure", "heal-8"],
+            "tags": ["item", "heal-8"],
             "entity_transition": {
                 "on_cleared": {
                     "entity_id": 0,
@@ -718,7 +718,7 @@
             "symbol": "Q",
             "level": 0,
             "count": 4,
-            "tags": ["treasure", "revealed-click-claim"],
+            "tags": ["item", "revealed-click-claim"],
             "entity_transition": {
                 "on_cleared": {
                     "entity_id": 0,
@@ -852,7 +852,7 @@
             "symbol": "E",
             "level": 0,
             "count": 0,
-            "tags": ["item", "revealed-click-claim", "reward-experience=5"],
+            "tags": ["item", "reward-experience=5"],
             "content_transitions": ["ALIVE_TO_CLAIMED"],
             "entity_transition": {
                 "on_cleared": {

@@ -14,7 +14,7 @@ typedef struct {
     unsigned level;
     unsigned count;
     bool is_enemy;
-    bool is_treasure;
+    bool is_item;
     bool blocks_input_on_reveal;
     char tags[MAX_ENTITY_TAGS][MAX_TAG_LENGTH];
     unsigned tag_count;

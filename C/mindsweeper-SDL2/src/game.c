@@ -1338,8 +1338,8 @@ void game_draw_entities_screen(const struct Game *g) {
             bool matches_category = false;
             switch (categories[cat].type) {
                 case 0: matches_category = entity->is_enemy; break;
-                case 1: matches_category = !entity->is_enemy && !entity->is_treasure; break;
-                case 2: matches_category = entity->is_treasure; break;
+                case 1: matches_category = !entity->is_enemy && !entity->is_item; break;
+                case 2: matches_category = entity->is_item; break;
             }
             
             if (matches_category) {
