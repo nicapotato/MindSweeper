@@ -45,6 +45,9 @@ struct Board {
         unsigned *entity_ids;            // 1D array: entity ID occupying each cell
         TileState *tile_states;          // 1D array: hidden/revealed mask
         
+        // Dead entity tracking (for instant combat resolution)
+        bool *dead_entities;             // 1D array: true if entity is dead (level=0 for threat calc)
+        
         // Tile variation data for TILE_HIDDEN
         unsigned *tile_variations;       // 1D array: random tile variation (0-3)
         unsigned *tile_rotations;        // 1D array: random rotation (0-3)
@@ -132,5 +135,9 @@ void board_calculate_threat_levels(struct Board *b);
 unsigned board_get_threat_level(const struct Board *b, unsigned row, unsigned col);
 void board_draw_threat_level_text(const struct Board *b, const char *text, int x, int y, SDL_Color color);
 void board_draw_threat_level_text_centered(const struct Board *b, const char *text, SDL_Rect tile_rect);
+
+// Dead entity management (for instant combat resolution)
+void board_mark_entity_dead(struct Board *b, unsigned row, unsigned col);
+bool board_is_entity_dead(const struct Board *b, unsigned row, unsigned col);
 
 #endif

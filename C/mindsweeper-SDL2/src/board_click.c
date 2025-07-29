@@ -2,6 +2,7 @@
 #include "game.h"
 #include "config.h"
 #include "entity_logic.h"
+#include "board.h"
 
 // Forward declarations
 void board_finish_animation(struct Board *b, unsigned row, unsigned col);
@@ -176,6 +177,10 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
         
         printf("Combat with enemy %s (ID: %u) - Player HP: %u, XP: %u\n", 
                entity->name, entity->id, g->player.health, g->player.experience);
+        
+        // IMMEDIATELY mark entity as dead (level 0) for threat calculation updates
+        board_mark_entity_dead(g->board, row, col);
+        printf("Enemy %s marked as dead - threat levels updated instantly\n", entity->name);
         
         // Check if player died from this combat - do this AFTER health update but BEFORE animations
         if (g->player.health <= 0 && !g->game_over_info.is_game_over) {

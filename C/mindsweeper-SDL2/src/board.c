@@ -122,56 +122,24 @@ void board_free(struct Board **board) {
 }
 
 bool board_calloc_arrays(struct Board *b) {
-    // Parameter validation
-    if (!b || b->rows == 0 || b->columns == 0) {
-        fprintf(stderr, "Invalid parameters to board_calloc_arrays\n");
+    size_t total_tiles = (size_t)(b->rows * b->columns);
+    
+    b->entity_ids = calloc(total_tiles, sizeof(unsigned));
+    b->tile_states = calloc(total_tiles, sizeof(TileState));
+    b->dead_entities = calloc(total_tiles, sizeof(bool));
+    b->animations = calloc(total_tiles, sizeof(TileAnimation));
+    b->display_sprites = calloc(total_tiles, sizeof(unsigned));
+    b->tile_variations = calloc(total_tiles, sizeof(unsigned));
+    b->tile_rotations = calloc(total_tiles, sizeof(unsigned));
+    b->threat_levels = calloc(total_tiles, sizeof(unsigned));
+
+    if (!b->entity_ids || !b->tile_states || !b->dead_entities || !b->animations || 
+        !b->display_sprites || !b->tile_variations || !b->tile_rotations || !b->threat_levels) {
+        board_free_arrays(b);
         return false;
     }
 
-    size_t total_tiles = (size_t)(b->rows * b->columns);
-
-    b->entity_ids = calloc(total_tiles, sizeof(unsigned));
-    if (!b->entity_ids) {
-        goto cleanup_failure;
-    }
-
-    b->tile_states = calloc(total_tiles, sizeof(TileState));
-    if (!b->tile_states) {
-        goto cleanup_failure;
-    }
-
-    b->animations = calloc(total_tiles, sizeof(TileAnimation));
-    if (!b->animations) {
-        goto cleanup_failure;
-    }
-
-    b->display_sprites = calloc(total_tiles, sizeof(unsigned));
-    if (!b->display_sprites) {
-        goto cleanup_failure;
-    }
-
-    // Allocate tile variation arrays
-    b->tile_variations = calloc(total_tiles, sizeof(unsigned));
-    if (!b->tile_variations) {
-        goto cleanup_failure;
-    }
-
-    b->tile_rotations = calloc(total_tiles, sizeof(unsigned));
-    if (!b->tile_rotations) {
-        goto cleanup_failure;
-    }
-
-    b->threat_levels = calloc(total_tiles, sizeof(unsigned));
-    if (!b->threat_levels) {
-        goto cleanup_failure;
-    }
-
     return true;
-
-cleanup_failure:
-    // Clean up any partially allocated memory
-    board_free_arrays(b);
-    return false;
 }
 
 void board_free_arrays(struct Board *b) {
@@ -182,6 +150,10 @@ void board_free_arrays(struct Board *b) {
     if (b->tile_states) {
         free(b->tile_states);
         b->tile_states = NULL;
+    }
+    if (b->dead_entities) {
+        free(b->dead_entities);
+        b->dead_entities = NULL;
     }
     if (b->animations) {
         free(b->animations);
@@ -217,6 +189,7 @@ bool board_reset(struct Board *b) {
     for (size_t i = 0; i < total_tiles; i++) {
         b->entity_ids[i] = 0;        // Empty entity
         b->tile_states[i] = TILE_HIDDEN;
+        b->dead_entities[i] = false; // No entities are dead initially
         b->animations[i].type = ANIM_NONE;
         b->display_sprites[i] = SPRITE_HIDDEN;  // Hidden sprite from main.h
         
@@ -618,10 +591,17 @@ void board_calculate_threat_levels(struct Board *b) {
                             
                             unsigned neighbor_entity_id = board_get_entity_id(b, (unsigned)neighbor_row, (unsigned)neighbor_col);
                             
-                            // Get entity level and add to threat
+                            // Get entity level and add to threat - but use level 0 if entity is dead
                             Entity *entity = config_get_entity(&g_config, neighbor_entity_id);
                             if (entity) {
-                                threat_level += entity->level;
+                                // Check if this neighbor entity is marked as dead
+                                size_t neighbor_index = (size_t)((unsigned)neighbor_row * b->columns + (unsigned)neighbor_col);
+                                if (b->dead_entities[neighbor_index]) {
+                                    // Entity is dead, treat as level 0 (no threat)
+                                    // threat_level += 0; (no need to add anything)
+                                } else {
+                                    threat_level += entity->level;
+                                }
                             }
                         }
                     }
@@ -640,6 +620,31 @@ unsigned board_get_threat_level(const struct Board *b, unsigned row, unsigned co
     
     size_t index = (size_t)(row * b->columns + col);
     return b->threat_levels[index];
+}
+
+// ========== DEAD ENTITY MANAGEMENT ==========
+
+void board_mark_entity_dead(struct Board *b, unsigned row, unsigned col) {
+    if (!b || !b->dead_entities || row >= b->rows || col >= b->columns) {
+        return;
+    }
+    
+    size_t index = (size_t)(row * b->columns + col);
+    b->dead_entities[index] = true;
+    
+    // Recalculate threat levels since a dead entity affects neighbor threat calculations
+    board_calculate_threat_levels(b);
+    
+    printf("Entity at [%u,%u] marked as dead - threat levels recalculated\n", row, col);
+}
+
+bool board_is_entity_dead(const struct Board *b, unsigned row, unsigned col) {
+    if (!b || !b->dead_entities || row >= b->rows || col >= b->columns) {
+        return false;
+    }
+    
+    size_t index = (size_t)(row * b->columns + col);
+    return b->dead_entities[index];
 }
 
 // ========== ADMIN FUNCTIONS ==========
