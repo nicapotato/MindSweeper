@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+RPG Version of Minesweeper, where there is a dimension of player level, player health, and concept of more than just bomb vs empty tiles, rather a range of interesting hostile and friendly entities that have different levels.
