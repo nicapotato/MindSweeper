@@ -16,13 +16,13 @@ bool clock_new(struct Clock **clock, SDL_Renderer *renderer, unsigned columns,
     c->columns = columns;
     c->scale = scale;
 
-    if (!load_media_sheet(c->renderer, &c->back_image, "images/digitback.png",
+    if (!load_media_sheet(c->renderer, &c->back_image, "assets/images/digitback.png",
                           DIGIT_BACK_WIDTH, DIGIT_BACK_HEIGHT,
                           &c->back_src_rects)) {
         return false;
     }
 
-    if (!load_media_sheet(c->renderer, &c->digit_image, "images/digits.png",
+    if (!load_media_sheet(c->renderer, &c->digit_image, "assets/images/digits.png",
                           DIGIT_WIDTH, DIGIT_HEIGHT, &c->digit_src_rects)) {
         return false;
     }

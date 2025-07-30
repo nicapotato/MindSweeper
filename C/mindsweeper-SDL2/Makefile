@@ -7,14 +7,13 @@ CC				?= gcc
 ifdef WASM
 	CC			= emcc
 	TARGET		= index.html
-	WASM_CFLAGS	= -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2
-	WASM_LDFLAGS = -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s SDL2_IMAGE_FORMATS='["png"]' \
+	WASM_CFLAGS	= -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2
+	WASM_LDFLAGS = -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2 -s SDL2_IMAGE_FORMATS='["png"]' \
+				  -s SDL2_MIXER_FORMATS='["wav", "ogg"]' \
 				  -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1gb \
 				  -s EXPORTED_FUNCTIONS='["_main"]' \
 				  -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
-				  --embed-file images@/images \
-				  --embed-file latest-s-v0_0_9.json@/latest-s-v0_0_9.json \
-				  --embed-file config_v2.json@/config_v2.json \
+				  --embed-file assets@/assets \
 				  --shell-file shell_template.html
 	CFLAGS_BASE	= -std=c11 -DWASM_BUILD $(WASM_CFLAGS)
 	LDLIBS_BASE	= $(WASM_LDFLAGS)
@@ -62,8 +61,8 @@ endif
 
 ifndef WASM
 ifeq ($(PKG_CONFIG),yes)
-    CFLAGS_BASE += $(shell pkg-config --cflags sdl2 SDL2_image SDL2_ttf) -I$(shell brew --prefix cjson)/include
-    LDLIBS_BASE += $(shell pkg-config --libs sdl2 SDL2_image SDL2_ttf) -L$(shell brew --prefix cjson)/lib -lcjson
+    CFLAGS_BASE += $(shell pkg-config --cflags sdl2 SDL2_image SDL2_ttf SDL2_mixer) -I$(shell brew --prefix cjson)/include
+    LDLIBS_BASE += $(shell pkg-config --libs sdl2 SDL2_image SDL2_ttf SDL2_mixer) -L$(shell brew --prefix cjson)/lib -lcjson
 else
     $(error "pkg-config is not available. Please install pkg-config.")
 endif
@@ -106,8 +105,8 @@ rebuild: clean all
 wasm: 
 	$(MAKE) clean
 	$(MAKE) all CC=emcc TARGET=index.html \
-		CFLAGS_BASE="-std=c11 -DWASM_BUILD -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2" \
-		LDLIBS_BASE="-s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s SDL2_IMAGE_FORMATS='[\"png\"]' -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1gb -s EXPORTED_FUNCTIONS='[\"_main\"]' -s EXPORTED_RUNTIME_METHODS='[\"ccall\", \"cwrap\"]' --embed-file images@/images --embed-file latest-s-v0_0_9.json@/latest-s-v0_0_9.json --embed-file config_v2.json@/config_v2.json --shell-file shell_template.html"
+		CFLAGS_BASE="-std=c11 -DWASM_BUILD -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2" \
+		LDLIBS_BASE="-s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2 -s SDL2_IMAGE_FORMATS='[\"png\"]' -s SDL2_MIXER_FORMATS='[\"wav\", \"ogg\"]' -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1gb -s EXPORTED_FUNCTIONS='[\"_main\"]' -s EXPORTED_RUNTIME_METHODS='[\"ccall\", \"cwrap\"]' --embed-file assets@/assets --shell-file shell_template.html"
 
 serve: wasm
 	@echo "Starting web server on http://localhost:8000"

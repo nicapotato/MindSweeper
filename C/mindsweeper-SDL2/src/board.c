@@ -36,9 +36,9 @@ bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
     // Load game configuration if not already loaded
     if (!g_config_loaded) {
 #ifdef WASM_BUILD
-        if (!config_load(&g_config, "config_v2.json")) {
+        if (!config_load(&g_config, "assets/config_v2.json")) {
 #else
-        if (!config_load(&g_config, "config_v2.json")) {
+        if (!config_load(&g_config, "assets/config_v2.json")) {
 #endif
             fprintf(stderr, "Failed to load game config\n");
             return false;
@@ -49,7 +49,7 @@ bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
 
     // Load entity sprites (dragons theme)
     if (!load_media_sheet(b->renderer, &b->entity_sprites, 
-                          "images/sprite-sheet-cats.png",
+                          "assets/images/sprite-sheet-cats.png",
                           PIECE_SIZE, PIECE_SIZE, &b->entity_src_rects)) {
         fprintf(stderr, "Failed to load entity sprites\n");
         return false;
@@ -57,14 +57,14 @@ bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
 
     // Load tile sprites for TILE_HIDDEN variations
     if (!load_media_sheet(b->renderer, &b->tile_sprites, 
-                          "images/tile-16x16.png",
+                          "assets/images/tile-16x16.png",
                           PIECE_SIZE, PIECE_SIZE, &b->tile_src_rects)) {
         fprintf(stderr, "Failed to load tile sprites\n");
         return false;
     }
 
     // Load TTF font for threat level display
-    b->threat_font = TTF_OpenFont("images/m6x11.ttf", 12 * b->scale);
+    b->threat_font = TTF_OpenFont("assets/images/m6x11.ttf", 12 * b->scale);
     if (!b->threat_font) {
         fprintf(stderr, "Failed to load TTF font for threat levels: %s\n", TTF_GetError());
         return false;
@@ -223,6 +223,7 @@ bool board_load_solution(struct Board *b, const char *solution_file, unsigned so
     }
     
     // Load entity IDs from solution
+    printf("Loading solution and resetting dead entities...\n");
     for (unsigned r = 0; r < b->rows; r++) {
         for (unsigned c = 0; c < b->columns; c++) {
             unsigned entity_id = solution.board[r][c];
@@ -230,8 +231,13 @@ bool board_load_solution(struct Board *b, const char *solution_file, unsigned so
             
             // All tiles start hidden
             board_set_tile_state(b, r, c, TILE_HIDDEN);
+            
+            // Reset dead entity status for new game
+            size_t index = (size_t)(r * b->columns + c);
+            b->dead_entities[index] = false;
         }
     }
+    printf("Solution loaded - all dead entities reset to false\n");
     
     // Calculate threat levels for the loaded solution
     board_calculate_threat_levels(b);

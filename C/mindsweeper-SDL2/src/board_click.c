@@ -3,6 +3,7 @@
 #include "config.h"
 #include "entity_logic.h"
 #include "board.h"
+#include "audio.h"
 
 // Forward declarations
 void board_finish_animation(struct Board *b, unsigned row, unsigned col);
@@ -83,13 +84,18 @@ void board_finish_animation(struct Board *b, unsigned row, unsigned col) {
         const GameConfig *config = board_get_config();
         Entity *entity = config_get_entity(config, current_entity_id);
         
-        if (entity && entity->transition.next_entity_id != current_entity_id) {
-            // Transition to next entity
-            board_set_entity_id(b, row, col, entity->transition.next_entity_id);
+        if (entity) {
+            // Use random choice for entity transition (handles both simple and random transitions)
+            unsigned new_entity_id = choose_random_entity_transition(entity);
+            printf("Combat transition: %u -> %u\n", current_entity_id, new_entity_id);
+            
+            // Transition to the selected entity
+            board_set_entity_id(b, row, col, new_entity_id);
             board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false);
         } else {
-            // No transition, just clear animation
-            anim->type = ANIM_NONE;
+            // Fallback: transition to empty tile
+            board_set_entity_id(b, row, col, 0);
+            board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false);
         }
         return;
     } else if (anim->type == ANIM_TREASURE_CLAIM) {
@@ -139,6 +145,9 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
             return false; // Input blocked during animation
         }
     }
+    
+    // Play crystal sound effect on tile click
+    audio_play_crystal_sound(&g->audio);
     
     TileState current_state = board_get_tile_state(g->board, row, col);
     unsigned entity_id = board_get_entity_id(g->board, row, col);
@@ -201,7 +210,7 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
                     }
                     if (strncmp(entity->tags[i], "reward-experience=", 18) == 0) {
                         int experience_amount = atoi(&entity->tags[i][18]);
-                        g->player.experience += experience_amount;
+                        g->player.experience += (unsigned)experience_amount;
                         break;
                     }
                     if (strncmp(entity->tags[i], "trigger-reveal-E1", 17) == 0) {
@@ -219,6 +228,7 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
                                 }
                             }
                         }
+                        printf("Revealed %u Entity 1 tiles\n", revealed_count);
                         break;
                     }
                     if (strncmp(entity->tags[i], "trigger-weakening-E7", 20) == 0) {
@@ -246,6 +256,60 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
                         printf("🔸 Weakening complete! Transformed %u mines to Entity 25 🔸\n", weakened_count);
                         break;
                     }
+                    if (strncmp(entity->tags[i], "reveal-1", 8) == 0) {
+                        printf("🔮 RANDOM SINGLE TILE REVEAL TRIGGER ACTIVATED! 🔮\n");
+                        
+                        // Find all hidden tiles
+                        unsigned hidden_tiles_count = 0;
+                        unsigned *hidden_rows = malloc(g->board->rows * g->board->columns * sizeof(unsigned));
+                        unsigned *hidden_cols = malloc(g->board->rows * g->board->columns * sizeof(unsigned));
+                        
+                        if (!hidden_rows || !hidden_cols) {
+                            printf("ERROR: Failed to allocate memory for hidden tiles\n");
+                            if (hidden_rows) free(hidden_rows);
+                            if (hidden_cols) free(hidden_cols);
+                            break;
+                        }
+                        
+                        // Collect all hidden tiles
+                        for (unsigned r = 0; r < g->board->rows; r++) {
+                            for (unsigned c = 0; c < g->board->columns; c++) {
+                                TileState tile_state = board_get_tile_state(g->board, r, c);
+                                if (tile_state == TILE_HIDDEN) {
+                                    hidden_rows[hidden_tiles_count] = r;
+                                    hidden_cols[hidden_tiles_count] = c;
+                                    hidden_tiles_count++;
+                                }
+                            }
+                        }
+                        
+                        if (hidden_tiles_count > 0) {
+                            // Pick a random hidden tile
+                            unsigned random_index = (unsigned)(rand() % (int)hidden_tiles_count);
+                            unsigned target_row = hidden_rows[random_index];
+                            unsigned target_col = hidden_cols[random_index];
+                            
+                            printf("Random single tile reveal at [%u,%u]\n", target_row, target_col);
+                            
+                            // Reveal the selected tile
+                            board_set_tile_state(g->board, target_row, target_col, TILE_REVEALED);
+                            
+                            // Update display sprite immediately
+                            size_t index = (size_t)(target_row * g->board->columns + target_col);
+                            unsigned tile_entity_id = board_get_entity_id(g->board, target_row, target_col);
+                            g->board->display_sprites[index] = get_entity_sprite_index(tile_entity_id, TILE_REVEALED, target_row, target_col);
+                            g->board->animations[index].type = ANIM_NONE;
+                            
+                            printf("🔮 Random single tile reveal complete! Revealed tile at [%u,%u] 🔮\n", target_row, target_col);
+                        } else {
+                            printf("No hidden tiles available to reveal\n");
+                        }
+                        
+                        // Cleanup
+                        free(hidden_rows);
+                        free(hidden_cols);
+                        break;
+                    }
                     if (strncmp(entity->tags[i], "reveal-3x3", 10) == 0) {
                         printf("🔮 RANDOM 3x3 REVEAL TRIGGER ACTIVATED! 🔮\n");
                         
@@ -255,8 +319,8 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
                         unsigned max_center_col = (g->board->columns >= 3) ? g->board->columns - 2 : 0;
                         
                         if (max_center_row > 0 && max_center_col > 0) {
-                            unsigned center_row = 1 + (rand() % max_center_row);
-                            unsigned center_col = 1 + (rand() % max_center_col);
+                            unsigned center_row = 1 + (unsigned)(rand() % (int)max_center_row);
+                            unsigned center_col = 1 + (unsigned)(rand() % (int)max_center_col);
                             
                             printf("Random 3x3 reveal centered at [%u,%u]\n", center_row, center_col);
                             
@@ -264,8 +328,8 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
                             // Reveal 3x3 area around the center position
                             for (int dr = -1; dr <= 1; dr++) {
                                 for (int dc = -1; dc <= 1; dc++) {
-                                    unsigned target_row = center_row + dr;
-                                    unsigned target_col = center_col + dc;
+                                    unsigned target_row = center_row + (unsigned)dr;
+                                    unsigned target_col = center_col + (unsigned)dc;
                                     
                                     // Double-check bounds
                                     if (target_row < g->board->rows && target_col < g->board->columns) {

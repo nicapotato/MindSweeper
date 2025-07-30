@@ -3,6 +3,7 @@
 #include "init_sdl.h"
 #include "board_click.h"
 #include "load_media.h"
+#include "audio.h"
 
 #ifdef WASM_BUILD
 // Global game pointer for Emscripten main loop
@@ -57,9 +58,15 @@ bool game_new(struct Game **game) {
     g->columns = DEFAULT_BOARD_COLS;   // Use constant instead of magic number
     
     // Calculate optimal scale based on window dimensions
-    g->scale = calculate_optimal_scale(WINDOW_WIDTH, WINDOW_HEIGHT, g->rows, g->columns);
+    g->scale = calculate_optimal_scale(WINDOW_WIDTH, WINDOW_HEIGHT, (int)g->rows, (int)g->columns);
 
     if (!game_init_sdl(g)) {
+        goto cleanup_failure;
+    }
+
+    // Initialize audio system
+    if (!audio_init(&g->audio)) {
+        fprintf(stderr, "Failed to initialize audio system\n");
         goto cleanup_failure;
     }
 
@@ -73,16 +80,16 @@ bool game_new(struct Game **game) {
 
     // Load solution data
 #ifdef WASM_BUILD
-    if (!board_load_solution(g->board, "latest-s-v0_0_9.json", 0)) {
+    if (!board_load_solution(g->board, "assets/latest-s-v0_0_9.json", 0)) {
 #else
-    if (!board_load_solution(g->board, "latest-s-v0_0_9.json", 0)) {
+    if (!board_load_solution(g->board, "assets/latest-s-v0_0_9.json", 0)) {
 #endif
         fprintf(stderr, "Failed to load solution data\n");
         goto cleanup_failure;
     }
 
     // Initialize admin panel with solution count
-    g->admin.total_solutions = config_count_solutions("latest-s-v0_0_9.json");
+    g->admin.total_solutions = config_count_solutions("assets/latest-s-v0_0_9.json");
     g->admin.current_solution_index = 0;
     printf("Total solutions available: %u\n", g->admin.total_solutions);
 
@@ -110,6 +117,9 @@ bool game_new(struct Game **game) {
     // Initialize screen system
     game_init_screen_system(g);
 
+    // Start background music
+    audio_play_background_music(&g->audio);
+
     return true;
 
 cleanup_failure:
@@ -121,6 +131,9 @@ cleanup_failure:
 void game_free(struct Game **game) {
     if (*game) {
         struct Game *g = *game;
+
+        // Clean up audio system
+        audio_cleanup(&g->audio);
 
         border_free(&g->border);
         board_free(&g->board);
@@ -196,7 +209,7 @@ bool game_reset(struct Game *g) {
     if (g->admin.total_solutions > 1) {
         // If we have multiple solutions, pick a different one
         do {
-            new_solution_index = (unsigned)(rand() % g->admin.total_solutions);
+            new_solution_index = (unsigned)(rand() % (int)g->admin.total_solutions);
         } while (new_solution_index == g->admin.current_solution_index && g->admin.total_solutions > 1);
     } else {
         // If only one solution or no solutions, use index 0
@@ -204,7 +217,7 @@ bool game_reset(struct Game *g) {
     }
     
     // Load the new solution
-    if (!board_load_solution(g->board, "latest-s-v0_0_9.json", new_solution_index)) {
+    if (!board_load_solution(g->board, "assets/latest-s-v0_0_9.json", new_solution_index)) {
         fprintf(stderr, "Failed to load random solution %u during reset\n", new_solution_index);
         // Fallback to regular reset if loading fails
         if (!board_reset(g->board)) {
@@ -236,7 +249,7 @@ void game_set_scale(struct Game *g) {
     // Update info font size
     if (g->info_font) {
         TTF_CloseFont(g->info_font);
-        g->info_font = TTF_OpenFont("images/m6x11.ttf", 14 * g->scale);
+        g->info_font = TTF_OpenFont("assets/images/m6x11.ttf", 14 * g->scale);
     }
 }
 
@@ -428,6 +441,21 @@ bool game_events(struct Game *g) {
                 // Always return to main game screen
                 game_set_screen(g, SCREEN_GAME);
                 break;
+            // Audio controls
+            case SDL_SCANCODE_M:
+                audio_toggle_music(&g->audio);
+                break;
+            case SDL_SCANCODE_S:
+                audio_toggle_sound(&g->audio);
+                break;
+            case SDL_SCANCODE_MINUS:
+                // Decrease music volume
+                audio_set_music_volume(&g->audio, g->audio.music_volume - 10);
+                break;
+            case SDL_SCANCODE_EQUALS:
+                // Increase music volume
+                audio_set_music_volume(&g->audio, g->audio.music_volume + 10);
+                break;
             default:
                 break;
             }
@@ -463,7 +491,7 @@ void game_draw(const struct Game *g) {
             // Draw keyboard shortcuts hint
             if (g->info_font) {
                 SDL_Color grey = {150, 150, 150, 255};
-                const char *hint = "Press H for Help, E for Entities";
+                const char *hint = "Press H for Help, E for Entities, M for Music, S for Sound";
                 
                 SDL_Surface *hint_surface = TTF_RenderText_Solid(g->info_font, hint, grey);
                 if (hint_surface) {
@@ -679,7 +707,7 @@ void game_admin_reveal_all(struct Game *g) {
 bool game_admin_load_map(struct Game *g, unsigned solution_index) {
     printf("📍 Loading map %u...\n", solution_index);
     
-    if (board_load_solution(g->board, "latest-s-v0_0_9.json", solution_index)) {
+    if (board_load_solution(g->board, "assets/latest-s-v0_0_9.json", solution_index)) {
         g->admin.current_solution_index = solution_index;
         
         // Reset game state for new map
@@ -835,14 +863,14 @@ bool player_panel_new(PlayerPanel **panel, SDL_Renderer *renderer, unsigned colu
 
     // Load sprite sheet for level-up button
     if (!load_media_sheet(p->renderer, &p->sprite_sheet, 
-                          "images/sprite-sheet-cats.png",
+                          "assets/images/sprite-sheet-cats.png",
                           PIECE_SIZE, PIECE_SIZE, &p->sprite_src_rects)) {
         fprintf(stderr, "Failed to load sprite sheet for player panel\n");
         return false;
     }
 
     // Load TTF font
-    p->font = TTF_OpenFont("images/m6x11.ttf", 12 * p->scale);
+            p->font = TTF_OpenFont("assets/images/m6x11.ttf", 12 * p->scale);
     if (!p->font) {
         fprintf(stderr, "Failed to load TTF font: %s\n", TTF_GetError());
         return false;
@@ -890,7 +918,7 @@ void player_panel_set_scale(PlayerPanel *p, int scale) {
     
     // Calculate panel width based on board columns, but cap it for reasonable UI
     int max_panel_columns = 30; // Reasonable maximum width
-    int effective_columns = (p->columns > max_panel_columns) ? max_panel_columns : p->columns;
+    int effective_columns = (p->columns > (unsigned)max_panel_columns) ? max_panel_columns : (int)p->columns;
     p->rect.w = (PIECE_SIZE * effective_columns) * p->scale;
     p->rect.h = PLAYER_PANEL_HEIGHT * p->scale;
     
@@ -1105,7 +1133,7 @@ void game_init_screen_system(struct Game *g) {
     g->current_screen = SCREEN_GAME;
     
     // Load font for information screens
-    g->info_font = TTF_OpenFont("images/m6x11.ttf", 14 * g->scale);
+            g->info_font = TTF_OpenFont("assets/images/m6x11.ttf", 14 * g->scale);
     if (!g->info_font) {
         fprintf(stderr, "Failed to load info font: %s\n", TTF_GetError());
         // Continue without font - fallback will be handled in drawing
@@ -1409,7 +1437,6 @@ void game_draw_howto_screen(const struct Game *g) {
     int start_y = 50 * g->scale;
     int line_height = 16 * g->scale;
     int current_y = start_y;
-    int max_width = (WINDOW_WIDTH - 20) * g->scale;
     
     // Title
     SDL_Surface *title_surface = TTF_RenderText_Solid(g->info_font, "How to Play MindSweeper", yellow);
@@ -1435,6 +1462,9 @@ void game_draw_howto_screen(const struct Game *g) {
         "• H - Toggle this How to Play screen",
         "• E - Toggle Entities information screen", 
         "• ESC - Return to main game",
+        "• M - Toggle background music",
+        "• S - Toggle sound effects",
+        "• - = - Adjust music volume",
         "",
         "CLICKING TILES:",
         "• Click hidden tiles to reveal them",

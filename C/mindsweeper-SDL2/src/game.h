@@ -6,6 +6,7 @@
 #include "board.h"
 #include "clock.h"
 #include "face.h"
+#include "audio.h"
 
 // Player stats structure
 typedef struct {
@@ -71,6 +72,7 @@ struct Game {
         UIScreenState current_screen;  // Current UI screen state
         ScreenButtons screen_buttons;  // Screen toggle buttons
         TTF_Font *info_font;          // Font for information screens
+        AudioSystem audio;             // Audio system
         bool is_running;
         GameOverInfo game_over_info;  // Replaced simple boolean with detailed info
         unsigned rows;

@@ -15,7 +15,7 @@ bool face_new(struct Face **face, SDL_Renderer *renderer, unsigned columns,
     f->scale = scale;
     f->image_index = 0;
 
-    if (!load_media_sheet(f->renderer, &f->image, "images/faces.png", FACE_SIZE,
+    if (!load_media_sheet(f->renderer, &f->image, "assets/images/faces.png", FACE_SIZE,
                           FACE_SIZE, &f->src_rects)) {
         return false;
     }

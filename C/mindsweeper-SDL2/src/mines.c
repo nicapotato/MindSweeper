@@ -16,13 +16,13 @@ bool mines_new(struct Mines **mines, SDL_Renderer *renderer, int scale,
     m->scale = scale;
     m->mine_count = mine_count;
 
-    if (!load_media_sheet(m->renderer, &m->back_image, "images/digitback.png",
+    if (!load_media_sheet(m->renderer, &m->back_image, "assets/images/digitback.png",
                           DIGIT_BACK_WIDTH, DIGIT_BACK_HEIGHT,
                           &m->back_src_rects)) {
         return false;
     }
 
-    if (!load_media_sheet(m->renderer, &m->digit_image, "images/digits.png",
+    if (!load_media_sheet(m->renderer, &m->digit_image, "assets/images/digits.png",
                           DIGIT_WIDTH, DIGIT_HEIGHT, &m->digit_src_rects)) {
         return false;
     }

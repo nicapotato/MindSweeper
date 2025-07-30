@@ -31,7 +31,7 @@ bool game_init_sdl(struct Game *g) {
         return false;
     }
 
-    SDL_Surface *icon_surf = IMG_Load("images/icon.png");
+    SDL_Surface *icon_surf = IMG_Load("assets/images/icon.png");
     if (icon_surf) {
         SDL_SetWindowIcon(g->window, icon_surf);
         SDL_FreeSurface(icon_surf);

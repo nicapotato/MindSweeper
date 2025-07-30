@@ -15,7 +15,7 @@ bool border_new(struct Border **border, SDL_Renderer *renderer, unsigned rows,
     b->columns = columns;
     b->scale = scale;
 
-    if (!load_media_sheet(b->renderer, &b->image, "images/borders.png",
+    if (!load_media_sheet(b->renderer, &b->image, "assets/images/borders.png",
                           PIECE_SIZE, BORDER_HEIGHT, &b->src_rects)) {
         return false;
     }
