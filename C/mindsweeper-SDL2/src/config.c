@@ -319,18 +319,54 @@ static bool parse_wasm_entities(const char *content, GameConfig *config) {
         // Parse sprite position (look for first x and y in revealed section)
         char *sprites_pos = strstr(entity_json, "\"sprites\":");
         if (sprites_pos) {
-            char *revealed_pos = strstr(sprites_pos, "\"revealed\":");
-            if (revealed_pos) {
-                char *x_pos = strstr(revealed_pos, "\"x\":");
-                char *y_pos = strstr(revealed_pos, "\"y\":");
-                if (x_pos && y_pos && x_pos < (revealed_pos + 200) && y_pos < (revealed_pos + 200)) {
-                    x_pos += 4;
-                    while (*x_pos == ' ' || *x_pos == '\t') x_pos++;
-                    e->sprite_pos.x = (unsigned)atoi(x_pos);
+            // Special handling for crystals (entity ID 15) with color variations
+            if (e->id == 15) {
+                // Crystal colors: red, blue, yellow, green
+                const char *colors[] = {"red", "blue", "yellow", "green"};
+                const char *selected_color = colors[e->level % 4]; // Use level to select color deterministically
+                
+                char color_pattern[64];
+                snprintf(color_pattern, sizeof(color_pattern), "\"%s\":", selected_color);
+                
+                char *color_pos = strstr(sprites_pos, color_pattern);
+                if (color_pos) {
+                    // Look for x array - use first value (index 0)
+                    char *x_array_pos = strstr(color_pos, "\"x\":");
+                    if (x_array_pos) {
+                        x_array_pos = strchr(x_array_pos, '[');
+                        if (x_array_pos) {
+                            x_array_pos++; // Skip '['
+                            while (*x_array_pos == ' ' || *x_array_pos == '\t') x_array_pos++;
+                            e->sprite_pos.x = (unsigned)atoi(x_array_pos); // Take first value
+                        }
+                    }
                     
-                    y_pos += 4;
-                    while (*y_pos == ' ' || *y_pos == '\t') y_pos++;
-                    e->sprite_pos.y = (unsigned)atoi(y_pos);
+                    // Look for y value
+                    char *y_pos = strstr(color_pos, "\"y\":");
+                    if (y_pos) {
+                        y_pos += 4;
+                        while (*y_pos == ' ' || *y_pos == '\t') y_pos++;
+                        e->sprite_pos.y = (unsigned)atoi(y_pos);
+                    }
+                }
+                
+                printf("WASM: Crystal entity uses %s color at sprite (%u,%u)\n", 
+                       selected_color, e->sprite_pos.x, e->sprite_pos.y);
+            } else {
+                // Standard revealed sprite handling for non-crystal entities
+                char *revealed_pos = strstr(sprites_pos, "\"revealed\":");
+                if (revealed_pos) {
+                    char *x_pos = strstr(revealed_pos, "\"x\":");
+                    char *y_pos = strstr(revealed_pos, "\"y\":");
+                    if (x_pos && y_pos && x_pos < (revealed_pos + 200) && y_pos < (revealed_pos + 200)) {
+                        x_pos += 4;
+                        while (*x_pos == ' ' || *x_pos == '\t') x_pos++;
+                        e->sprite_pos.x = (unsigned)atoi(x_pos);
+                        
+                        y_pos += 4;
+                        while (*y_pos == ' ' || *y_pos == '\t') y_pos++;
+                        e->sprite_pos.y = (unsigned)atoi(y_pos);
+                    }
                 }
             }
         }
@@ -428,8 +464,8 @@ bool config_load(GameConfig *config, const char *config_file) {
     // Parse entities
     if (!parse_wasm_entities(content, config)) {
         printf("WASM: Failed to parse entities, using fallback\n");
-        config->entity_count = 2;
-        config->entities = calloc(2, sizeof(Entity));
+        config->entity_count = 3;
+        config->entities = calloc(3, sizeof(Entity));
         
         // Entity 0: Empty
         config->entities[0].id = 0;
@@ -454,6 +490,21 @@ bool config_load(GameConfig *config, const char *config_file) {
         config->entities[1].tag_count = 1;
         strcpy(config->entities[1].tags[0], "enemy");
         config->entities[1].is_item = false;
+        
+        // Entity 15: Crystals (fallback)
+        config->entities[2].id = 15;
+        strcpy(config->entities[2].name, "Crystals");
+        strcpy(config->entities[2].description, "A collection of crystals");
+        config->entities[2].level = 0;
+        config->entities[2].is_enemy = false;
+        config->entities[2].is_item = true;
+        config->entities[2].sprite_pos.x = 0; // Red crystal, first variation
+        config->entities[2].sprite_pos.y = 27;
+        config->entities[2].transition.next_entity_id = 0;
+        strcpy(config->entities[2].transition.sound, "crystal");
+        config->entities[2].tag_count = 2;
+        strcpy(config->entities[2].tags[0], "item");
+        strcpy(config->entities[2].tags[1], "revealed-click-claim");
     }
     
     free(content);
@@ -672,10 +723,37 @@ bool config_load(GameConfig *config, const char *config_file) {
             // Parse sprite position
             cJSON *sprites = cJSON_GetObjectItem(entity, "sprites");
             if (sprites) {
-                cJSON *revealed = cJSON_GetObjectItem(sprites, "revealed");
-                if (revealed) {
-                    e->sprite_pos.x = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(revealed, "x"));
-                    e->sprite_pos.y = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(revealed, "y"));
+                // Special handling for crystals (entity ID 15) with color variations
+                if (e->id == 15) {
+                    // Crystal colors: red, blue, yellow, green
+                    const char *colors[] = {"red", "blue", "yellow", "green"};
+                    const char *selected_color = colors[e->level % 4]; // Use level to select color deterministically
+                    
+                    cJSON *color_sprite = cJSON_GetObjectItem(sprites, selected_color);
+                    if (color_sprite) {
+                        // Get x array and use first value (index 0)
+                        cJSON *x_array = cJSON_GetObjectItem(color_sprite, "x");
+                        if (x_array && cJSON_IsArray(x_array) && cJSON_GetArraySize(x_array) > 0) {
+                            cJSON *first_x = cJSON_GetArrayItem(x_array, 0);
+                            e->sprite_pos.x = (unsigned)cJSON_GetNumberValue(first_x);
+                        }
+                        
+                        // Get y value
+                        cJSON *y_value = cJSON_GetObjectItem(color_sprite, "y");
+                        if (y_value) {
+                            e->sprite_pos.y = (unsigned)cJSON_GetNumberValue(y_value);
+                        }
+                    }
+                    
+                    printf("Crystal entity uses %s color at sprite (%u,%u)\n", 
+                           selected_color, e->sprite_pos.x, e->sprite_pos.y);
+                } else {
+                    // Standard revealed sprite handling for non-crystal entities
+                    cJSON *revealed = cJSON_GetObjectItem(sprites, "revealed");
+                    if (revealed) {
+                        e->sprite_pos.x = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(revealed, "x"));
+                        e->sprite_pos.y = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(revealed, "y"));
+                    }
                 }
             }
             

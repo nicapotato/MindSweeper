@@ -9,7 +9,7 @@ static bool g_config_loaded = false;
 
 bool board_calloc_arrays(struct Board *b);
 void board_free_arrays(struct Board *b);
-unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state);
+unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsigned row, unsigned col);
 void board_draw_threat_level_text(const struct Board *b, const char *text, int x, int y, SDL_Color color);
 
 bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
@@ -299,7 +299,7 @@ void board_set_tile_state(struct Board *b, unsigned row, unsigned col, TileState
     // Update display sprite immediately if not animating
     if (b->animations[index].type == ANIM_NONE) {
         unsigned entity_id = b->entity_ids[index];
-        b->display_sprites[index] = get_entity_sprite_index(entity_id, state);
+        b->display_sprites[index] = get_entity_sprite_index(entity_id, state, row, col);
     }
     
     // Recalculate threat levels when tile is revealed
@@ -350,7 +350,7 @@ void board_update_animations(struct Board *b) {
 
 
 
-unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state) {
+unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsigned row, unsigned col) {
     if (tile_state == TILE_HIDDEN) {
         return SPRITE_HIDDEN;
     }
@@ -358,8 +358,35 @@ unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state) {
     // For revealed tiles, use entity's sprite position
     Entity *entity = config_get_entity(&g_config, entity_id);
     if (entity) {
-        // Convert 2D sprite position to 1D index
-        // Assuming 16 sprites per row in the sprite sheet
+        // Special handling for crystals (entity ID 15) - assign different colors based on position
+        if (entity_id == 15) {
+            // Crystal colors: red, blue, yellow, green
+            const unsigned crystal_colors[4][2] = {
+                {0, 27}, // Red crystal
+                {0, 28}, // Blue crystal  
+                {0, 29}, // Yellow crystal
+                {0, 30}  // Green crystal
+            };
+            
+            // Use a simple formula that gives good distribution for the specific board positions
+            // Based on the actual crystal positions in the board: [0,2], [1,11], [9,5], [9,13]
+            unsigned color_index;
+            if (row == 0 && col == 2) color_index = 0;      // Red
+            else if (row == 1 && col == 11) color_index = 1; // Blue
+            else if (row == 9 && col == 5) color_index = 2;  // Yellow
+            else if (row == 9 && col == 13) color_index = 3; // Green
+            else color_index = (row + col) % 4; // Fallback for any other crystals
+            
+            unsigned sprite_x = crystal_colors[color_index][0];
+            unsigned sprite_y = crystal_colors[color_index][1];
+            unsigned sprite_index = sprite_y * 4 + sprite_x;
+            
+            printf("    Crystal at [%u,%u] assigned color %u (sprite index %u)\n", 
+                   row, col, color_index, sprite_index);
+            return sprite_index;
+        }
+        
+        // Standard sprite handling for other entities
         unsigned sprite_index = entity->sprite_pos.y * 4 + entity->sprite_pos.x;
         // printf("    Calculating sprite index: y=%u * 4 + x=%u = %u\n", 
         //        entity->sprite_pos.y, entity->sprite_pos.x, sprite_index);
@@ -663,7 +690,7 @@ void board_reveal_all_tiles(struct Board *b) {
                 // Update display sprite immediately
                 size_t index = (size_t)(r * b->columns + c);
                 unsigned entity_id = b->entity_ids[index];
-                b->display_sprites[index] = get_entity_sprite_index(entity_id, TILE_REVEALED);
+                b->display_sprites[index] = get_entity_sprite_index(entity_id, TILE_REVEALED, r, c);
                 
                 // Clear any ongoing animation
                 b->animations[index].type = ANIM_NONE;

@@ -28,14 +28,14 @@ void board_start_animation(struct Board *b, unsigned row, unsigned col,
     switch (type) {
         case ANIM_REVEALING:
             anim->start_sprite = SPRITE_HIDDEN;
-            anim->end_sprite = get_entity_sprite_index(entity_id, TILE_REVEALED);
+            anim->end_sprite = get_entity_sprite_index(entity_id, TILE_REVEALED, row, col);
             printf("  Animation: SPRITE_HIDDEN (%u) -> Entity sprite (%u)\n", 
                    anim->start_sprite, anim->end_sprite);
             break;
         case ANIM_COMBAT:
             // Stage 1: Show entity sprite for 0.5s
-            anim->start_sprite = get_entity_sprite_index(entity_id, tile_state);
-            anim->end_sprite = get_entity_sprite_index(entity_id, tile_state);
+            anim->start_sprite = get_entity_sprite_index(entity_id, tile_state, row, col);
+            anim->end_sprite = get_entity_sprite_index(entity_id, tile_state, row, col);
             break;
         case ANIM_COMBAT_STAGE2:
             // Stage 2: Show sprite x:2, y:0 (combat effect sprite)
@@ -45,14 +45,14 @@ void board_start_animation(struct Board *b, unsigned row, unsigned col,
             break;
         case ANIM_DYING:
         case ANIM_TREASURE_CLAIM:
-            anim->start_sprite = get_entity_sprite_index(entity_id, tile_state);
-            anim->end_sprite = get_entity_sprite_index(entity_id, tile_state);
+            anim->start_sprite = get_entity_sprite_index(entity_id, tile_state, row, col);
+            anim->end_sprite = get_entity_sprite_index(entity_id, tile_state, row, col);
             break;
         case ANIM_ENTITY_TRANSITION: {
             // Show the new entity that we're transitioning to
             unsigned new_entity_id = b->entity_ids[index];
-            anim->start_sprite = get_entity_sprite_index(new_entity_id, tile_state);
-            anim->end_sprite = get_entity_sprite_index(new_entity_id, tile_state);
+            anim->start_sprite = get_entity_sprite_index(new_entity_id, tile_state, row, col);
+            anim->end_sprite = get_entity_sprite_index(new_entity_id, tile_state, row, col);
             break;
         }
         default:
@@ -197,71 +197,98 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
                     if (strncmp(entity->tags[i], "heal-", 5) == 0) {                        
                         int heal_amount = atoi(&entity->tags[i][5]);
                         game_update_player_health(g, heal_amount);
+                        break;
                     }
                     if (strncmp(entity->tags[i], "reward-experience=", 18) == 0) {
                         int experience_amount = atoi(&entity->tags[i][18]);
                         g->player.experience += experience_amount;
+                        break;
                     }
-                    if (strncmp(entity->tags[i], "board-effect", 12) == 0) {
-                        for (unsigned j = 0; j < entity->tag_count; j++) {
-                            if (strncmp(entity->tags[j], "trigger-reveal-E1", 17) == 0) {
-                                unsigned revealed_count = 0;
-                                for (unsigned r = 0; r < g->board->rows; r++) {
-                                    for (unsigned c = 0; c < g->board->columns; c++) {
-                                        TileState tile_state = board_get_tile_state(g->board, r, c);
-                                        unsigned tile_entity_id = board_get_entity_id(g->board, r, c);
-                                        if (tile_state == TILE_HIDDEN && tile_entity_id == 1) {
-                                            board_set_tile_state(g->board, r, c, TILE_REVEALED);
-                                            size_t index = (size_t)(r * g->board->columns + c);
-                                            g->board->display_sprites[index] = get_entity_sprite_index(tile_entity_id, TILE_REVEALED);
-                                            g->board->animations[index].type = ANIM_NONE;
-                                            revealed_count++;
-                                        }
-                                    }
+                    if (strncmp(entity->tags[i], "trigger-reveal-E1", 17) == 0) {
+                        unsigned revealed_count = 0;
+                        for (unsigned r = 0; r < g->board->rows; r++) {
+                            for (unsigned c = 0; c < g->board->columns; c++) {
+                                TileState tile_state = board_get_tile_state(g->board, r, c);
+                                unsigned tile_entity_id = board_get_entity_id(g->board, r, c);
+                                if (tile_state == TILE_HIDDEN && tile_entity_id == 1) {
+                                    board_set_tile_state(g->board, r, c, TILE_REVEALED);
+                                    size_t index = (size_t)(r * g->board->columns + c);
+                                    g->board->display_sprites[index] = get_entity_sprite_index(tile_entity_id, TILE_REVEALED, r, c);
+                                    g->board->animations[index].type = ANIM_NONE;
+                                    revealed_count++;
                                 }
-                                break;
-                            }
-                            if (strncmp(entity->tags[j], "trigger-weakening-E7", 20) == 0) {
-                                printf("🔸 WEAKENING TRIGGER ACTIVATED! 🔸\n");
-                                // Transform all Entity 7 tiles to Entity 25 (weakened mines)
-                                unsigned weakened_count = 0;
-                                for (unsigned r = 0; r < g->board->rows; r++) {
-                                    for (unsigned c = 0; c < g->board->columns; c++) {
-                                        unsigned tile_entity_id = board_get_entity_id(g->board, r, c);
-                                        
-                                        if (tile_entity_id == 7) {
-                                            // Transform Entity 7 to Entity 25 (weakened mine)
-                                            board_set_entity_id(g->board, r, c, 25);
-                                            
-                                            // Update display sprite immediately
-                                            size_t index = (size_t)(r * g->board->columns + c);
-                                            TileState tile_state = board_get_tile_state(g->board, r, c);
-                                            g->board->display_sprites[index] = get_entity_sprite_index(25, tile_state);
-                                            
-                                            weakened_count++;
-                                            printf("Transformed mine at [%u,%u] from Entity 7 to Entity 25\n", r, c);
-                                        }
-                                    }
-                                }
-                                printf("🔸 Weakening complete! Transformed %u mines to Entity 25 🔸\n", weakened_count);
-                                break;
                             }
                         }
                         break;
                     }
                     if (strncmp(entity->tags[i], "trigger-weakening-E7", 20) == 0) {
+                        printf("🔸 WEAKENING TRIGGER ACTIVATED! 🔸\n");
+                        // Transform all Entity 7 tiles to Entity 25 (weakened mines)
                         unsigned weakened_count = 0;
                         for (unsigned r = 0; r < g->board->rows; r++) {
                             for (unsigned c = 0; c < g->board->columns; c++) {
                                 unsigned tile_entity_id = board_get_entity_id(g->board, r, c);
+                                
                                 if (tile_entity_id == 7) {
+                                    // Transform Entity 7 to Entity 25 (weakened mine)
                                     board_set_entity_id(g->board, r, c, 25);
+                                    
+                                    // Update display sprite immediately
                                     size_t index = (size_t)(r * g->board->columns + c);
                                     TileState tile_state = board_get_tile_state(g->board, r, c);
-                                    g->board->display_sprites[index] = get_entity_sprite_index(25, tile_state);
+                                    g->board->display_sprites[index] = get_entity_sprite_index(25, tile_state, r, c);
+                                    
                                     weakened_count++;
+                                    printf("Transformed mine at [%u,%u] from Entity 7 to Entity 25\n", r, c);
                                 }
                             }
+                        }
+                        printf("🔸 Weakening complete! Transformed %u mines to Entity 25 🔸\n", weakened_count);
+                        break;
+                    }
+                    if (strncmp(entity->tags[i], "reveal-3x3", 10) == 0) {
+                        printf("🔮 RANDOM 3x3 REVEAL TRIGGER ACTIVATED! 🔮\n");
+                        
+                        // Pick a random center position for the 3x3 area
+                        // Ensure the 3x3 area fits within board bounds
+                        unsigned max_center_row = (g->board->rows >= 3) ? g->board->rows - 2 : 0;
+                        unsigned max_center_col = (g->board->columns >= 3) ? g->board->columns - 2 : 0;
+                        
+                        if (max_center_row > 0 && max_center_col > 0) {
+                            unsigned center_row = 1 + (rand() % max_center_row);
+                            unsigned center_col = 1 + (rand() % max_center_col);
+                            
+                            printf("Random 3x3 reveal centered at [%u,%u]\n", center_row, center_col);
+                            
+                            unsigned revealed_count = 0;
+                            // Reveal 3x3 area around the center position
+                            for (int dr = -1; dr <= 1; dr++) {
+                                for (int dc = -1; dc <= 1; dc++) {
+                                    unsigned target_row = center_row + dr;
+                                    unsigned target_col = center_col + dc;
+                                    
+                                    // Double-check bounds
+                                    if (target_row < g->board->rows && target_col < g->board->columns) {
+                                        TileState tile_state = board_get_tile_state(g->board, target_row, target_col);
+                                        
+                                        if (tile_state == TILE_HIDDEN) {
+                                            board_set_tile_state(g->board, target_row, target_col, TILE_REVEALED);
+                                            
+                                            // Update display sprite immediately
+                                            size_t index = (size_t)(target_row * g->board->columns + target_col);
+                                            unsigned tile_entity_id = board_get_entity_id(g->board, target_row, target_col);
+                                            g->board->display_sprites[index] = get_entity_sprite_index(tile_entity_id, TILE_REVEALED, target_row, target_col);
+                                            g->board->animations[index].type = ANIM_NONE;
+                                            
+                                            revealed_count++;
+                                            printf("Revealed tile at [%u,%u]\n", target_row, target_col);
+                                        }
+                                    }
+                                }
+                            }
+                            printf("🔮 Random 3x3 reveal complete! Revealed %u tiles 🔮\n", revealed_count);
+                        } else {
+                            printf("Board too small for 3x3 reveal (need at least 3x3 board)\n");
                         }
                         break;
                     }
