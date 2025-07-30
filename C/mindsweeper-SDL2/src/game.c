@@ -78,20 +78,26 @@ bool game_new(struct Game **game) {
         goto cleanup_failure;
     }
 
+    // Initialize admin panel with solution count first
+    g->admin.total_solutions = config_count_solutions("assets/solutions_1_n_20.json");
+    printf("Total solutions available: %u\n", g->admin.total_solutions);
+    
+    // Pick a random solution index for initial load
+    unsigned initial_solution_index = 0;
+    if (g->admin.total_solutions > 0) {
+        initial_solution_index = (unsigned)(rand() % (int)g->admin.total_solutions);
+    }
+    g->admin.current_solution_index = initial_solution_index;
+    
     // Load solution data
 #ifdef WASM_BUILD
-    if (!board_load_solution(g->board, "assets/latest-s-v0_0_9.json", 0)) {
+    if (!board_load_solution(g->board, "assets/solutions_1_n_20.json", initial_solution_index)) {
 #else
-    if (!board_load_solution(g->board, "assets/latest-s-v0_0_9.json", 0)) {
+    if (!board_load_solution(g->board, "assets/solutions_1_n_20.json", initial_solution_index)) {
 #endif
         fprintf(stderr, "Failed to load solution data\n");
         goto cleanup_failure;
     }
-
-    // Initialize admin panel with solution count
-    g->admin.total_solutions = config_count_solutions("assets/latest-s-v0_0_9.json");
-    g->admin.current_solution_index = 0;
-    printf("Total solutions available: %u\n", g->admin.total_solutions);
 
     if (!clock_new(&g->clock, g->renderer, g->columns, g->scale)) {
         goto cleanup_failure;
@@ -197,27 +203,22 @@ void game_set_title(struct Game *g) {
         return;
     }
 
-    snprintf(title, MAX_TITLE_LENGTH, "%s - %s", WINDOW_TITLE, g->size_str);
+    snprintf(title, MAX_TITLE_LENGTH, "%s - Map %u", WINDOW_TITLE, g->admin.current_solution_index);
     SDL_SetWindowTitle(g->window, title);
 
     free(title);
 }
 
 bool game_reset(struct Game *g) {
-    // Pick a random solution index (excluding the current one for variety)
-    unsigned new_solution_index;
-    if (g->admin.total_solutions > 1) {
-        // If we have multiple solutions, pick a different one
-        do {
-            new_solution_index = (unsigned)(rand() % (int)g->admin.total_solutions);
-        } while (new_solution_index == g->admin.current_solution_index && g->admin.total_solutions > 1);
-    } else {
-        // If only one solution or no solutions, use index 0
-        new_solution_index = 0;
-    }
+    printf("Game reset requested. Current solution: %u, Total solutions: %u\n", 
+           g->admin.current_solution_index, g->admin.total_solutions);
+    
+    // Always pick a random solution index for variety
+    unsigned new_solution_index = (unsigned)(rand() % (int)g->admin.total_solutions);
+    printf("Generated random solution index: %u\n", new_solution_index);
     
     // Load the new solution
-    if (!board_load_solution(g->board, "assets/latest-s-v0_0_9.json", new_solution_index)) {
+    if (!board_load_solution(g->board, "assets/solutions_1_n_20.json", new_solution_index)) {
         fprintf(stderr, "Failed to load random solution %u during reset\n", new_solution_index);
         // Fallback to regular reset if loading fails
         if (!board_reset(g->board)) {
@@ -227,6 +228,9 @@ bool game_reset(struct Game *g) {
         g->admin.current_solution_index = new_solution_index;
         printf("Reset: Loaded random solution %u\n", new_solution_index);
     }
+
+    // Update window title to reflect new solution index
+    game_set_title(g);
 
     clock_reset(g->clock);
     face_default(g->face);
@@ -486,7 +490,7 @@ void game_draw(const struct Game *g) {
     switch (g->current_screen) {
         case SCREEN_GAME:
             board_draw(g->board);
-            player_panel_draw(g->player_panel, &g->player);
+            player_panel_draw(g->player_panel, &g->player, g);
             
             // Draw keyboard shortcuts hint
             if (g->info_font) {
@@ -595,11 +599,11 @@ void game_init_player_stats(struct Game *g) {
     g->player.experience = 0;
     g->player.exp_to_next_level = game_calculate_exp_requirement(g->player.level);
     
-    // Initialize admin panel
+    // Initialize admin panel (but preserve total_solutions if already set)
     g->admin.god_mode_enabled = false;
     g->admin.admin_panel_visible = false;
     g->admin.current_solution_index = 0;
-    g->admin.total_solutions = 1; // Will be updated when available
+    // Don't reset total_solutions - preserve the value set during game initialization
     
     printf("Player initialized: Level %u, Health %u/%u, Exp %u/%u\n", 
            g->player.level, g->player.health, g->player.max_health,
@@ -707,13 +711,17 @@ void game_admin_reveal_all(struct Game *g) {
 bool game_admin_load_map(struct Game *g, unsigned solution_index) {
     printf("📍 Loading map %u...\n", solution_index);
     
-    if (board_load_solution(g->board, "assets/latest-s-v0_0_9.json", solution_index)) {
+    if (board_load_solution(g->board, "assets/solutions_1_n_20.json", solution_index)) {
         g->admin.current_solution_index = solution_index;
         
-        // Reset game state for new map
-        if (!game_reset(g)) {
-            return false;
-        }
+        // Update window title to reflect new solution index
+        game_set_title(g);
+        
+        // Reset game state for new map (but don't change solution again)
+        clock_reset(g->clock);
+        face_default(g->face);
+        g->game_over_info.is_game_over = false;  // Reset game over state
+        g->game_over_info.death_cause[0] = '\0'; // Clear death cause
         
         printf("✅ Successfully loaded map %u\n", solution_index);
         return true;
@@ -868,9 +876,11 @@ bool player_panel_new(PlayerPanel **panel, SDL_Renderer *renderer, unsigned colu
         fprintf(stderr, "Failed to load sprite sheet for player panel\n");
         return false;
     }
+    
+
 
     // Load TTF font
-            p->font = TTF_OpenFont("assets/images/m6x11.ttf", 12 * p->scale);
+            p->font = TTF_OpenFont("assets/images/m6x11.ttf", 8 * p->scale);
     if (!p->font) {
         fprintf(stderr, "Failed to load TTF font: %s\n", TTF_GetError());
         return false;
@@ -914,19 +924,19 @@ void player_panel_set_scale(PlayerPanel *p, int scale) {
     p->rect.x = (PIECE_SIZE - BORDER_LEFT) * p->scale; // Align with game board
     
     // Position panel below the actual board height (using DEFAULT_BOARD_ROWS instead of hardcoded 10)
-    p->rect.y = (GAME_BOARD_Y + (PIECE_SIZE * DEFAULT_BOARD_ROWS) + 10) * p->scale; // Below game board
+    p->rect.y = (GAME_BOARD_Y + (PIECE_SIZE * DEFAULT_BOARD_ROWS) + 5) * p->scale; // Below game board, reduced spacing
     
     // Calculate panel width based on board columns, but cap it for reasonable UI
-    int max_panel_columns = 30; // Reasonable maximum width
+    int max_panel_columns = 20; // Reduced maximum width to reduce white space
     int effective_columns = (p->columns > (unsigned)max_panel_columns) ? max_panel_columns : (int)p->columns;
     p->rect.w = (PIECE_SIZE * effective_columns) * p->scale;
     p->rect.h = PLAYER_PANEL_HEIGHT * p->scale;
     
     // Set up level-up button position (left side)
-    p->level_up_button.x = p->rect.x + 5 * p->scale;
-    p->level_up_button.y = p->rect.y + 5 * p->scale;
-    p->level_up_button.w = (PIECE_SIZE * 2) * p->scale;
-    p->level_up_button.h = (PIECE_SIZE * 2) * p->scale;
+    p->level_up_button.x = p->rect.x + 4 * p->scale;
+    p->level_up_button.y = p->rect.y + 4 * p->scale;
+    p->level_up_button.w = (PIECE_SIZE * 1.5) * p->scale;
+    p->level_up_button.h = (PIECE_SIZE * 1.5) * p->scale;
 }
 
 void player_panel_set_size(PlayerPanel *p, unsigned columns) {
@@ -935,7 +945,7 @@ void player_panel_set_size(PlayerPanel *p, unsigned columns) {
     p->rect.x = (PIECE_SIZE * 4) * p->scale;
 }
 
-void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats) {
+void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats, const struct Game *g) {
     // Draw grey panel background similar to border style
     SDL_SetRenderDrawColor(p->renderer, 192, 192, 192, 255); // Light grey
     SDL_RenderFillRect(p->renderer, &p->rect);
@@ -954,35 +964,45 @@ void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats) {
     SDL_SetRenderDrawColor(p->renderer, 255, 255, 255, 255); // White highlight
     SDL_RenderDrawRect(p->renderer, &inner_border);
     
-    // Draw level-up button (left side with sprite 0,0)
-    if (p->can_level_up) {
-        // Button background
-        SDL_SetRenderDrawColor(p->renderer, 255, 255, 0, 255); // Yellow highlight
-        SDL_RenderFillRect(p->renderer, &p->level_up_button);
+    // Draw player character sprite (sprite 0) as the base
+    if (p->sprite_sheet && p->sprite_src_rects) {
+        // Use sprite 0 as the default player character (we know it exists and is visible)
+        int sprite_index = 0;
         
-        // Button border
-        SDL_SetRenderDrawColor(p->renderer, 0, 0, 0, 255);
-        SDL_RenderDrawRect(p->renderer, &p->level_up_button);
-        
-        // Draw sprite (0,0) from sprite sheet
-        if (p->sprite_sheet && p->sprite_src_rects) {
+        // Add bounds checking and fallback
+        if (sprite_index >= 0 && sprite_index < 132) { // 4 * 33 = 132 total sprites
+            SDL_RenderCopy(p->renderer, p->sprite_sheet, &p->sprite_src_rects[sprite_index], &p->level_up_button);
+        } else {
+            // Fallback to sprite 0 if out of bounds
             SDL_RenderCopy(p->renderer, p->sprite_sheet, &p->sprite_src_rects[0], &p->level_up_button);
         }
     } else {
-        // Disabled button
-        SDL_SetRenderDrawColor(p->renderer, 160, 160, 160, 255); // Grey
+        // Fallback: draw a simple colored rectangle if sprite sheet failed to load
+        SDL_SetRenderDrawColor(p->renderer, 100, 150, 200, 255); // Blue-ish color
         SDL_RenderFillRect(p->renderer, &p->level_up_button);
-        SDL_SetRenderDrawColor(p->renderer, 100, 100, 100, 255);
+        SDL_SetRenderDrawColor(p->renderer, 0, 0, 0, 255);
         SDL_RenderDrawRect(p->renderer, &p->level_up_button);
     }
     
+    // Draw level-up overlay when player can level up
+    if (p->can_level_up) {
+        // Yellow highlight border around the button
+        SDL_SetRenderDrawColor(p->renderer, 255, 255, 0, 255); // Yellow highlight
+        SDL_RenderDrawRect(p->renderer, &p->level_up_button);
+        
+        // Draw level-up sprite (sprite 1) as overlay
+        if (p->sprite_sheet && p->sprite_src_rects) {
+            SDL_RenderCopy(p->renderer, p->sprite_sheet, &p->sprite_src_rects[1], &p->level_up_button);
+        }
+    }
+    
     // Level display area (to the left of health/experience bars)
-    int bars_start_x = p->level_up_button.x + p->level_up_button.w + 10 * p->scale;
+    int bars_start_x = p->level_up_button.x + p->level_up_button.w + 8 * p->scale;
     SDL_Rect level_display = {
         bars_start_x,
-        p->level_up_button.y + 8 * p->scale, // Center vertically
-        50 * p->scale,
-        20 * p->scale
+        p->level_up_button.y + 6 * p->scale, // Center vertically
+        40 * p->scale,
+        16 * p->scale
     };
     
     // Level background (light grey with border)
@@ -1000,13 +1020,36 @@ void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats) {
                           level_display.y + 4 * p->scale, 
                           black);
     
+    // Draw cave solution index underneath the level
+    SDL_Rect map_display = {
+        bars_start_x,
+        level_display.y + level_display.h + 2 * p->scale, // Below level display, reduced spacing
+        60 * p->scale,  // Slightly narrower to fit better
+        14 * p->scale   // Slightly smaller height
+    };
+    
+    // Map background (light blue with border)
+    SDL_SetRenderDrawColor(p->renderer, 200, 220, 255, 255); // Light blue
+    SDL_RenderFillRect(p->renderer, &map_display);
+    SDL_SetRenderDrawColor(p->renderer, 0, 0, 0, 255);
+    SDL_RenderDrawRect(p->renderer, &map_display);
+    
+    // Draw map text "Map: X"
+    char map_text[32];
+    snprintf(map_text, sizeof(map_text), "Map: %u", g->admin.current_solution_index);
+    SDL_Color dark_blue = {0, 0, 128, 255};
+    player_panel_draw_text(p, map_text, 
+                          map_display.x + 4 * p->scale, 
+                          map_display.y + 4 * p->scale, 
+                          dark_blue);
+    
     // Health bar with background and progress
-    int health_start_x = bars_start_x + level_display.w + 10 * p->scale;
+    int health_start_x = bars_start_x + map_display.w + 8 * p->scale;
     SDL_Rect health_bg = {
         health_start_x,
         p->level_up_button.y,
-        100 * p->scale,  // Reduced width to fit better
-        16 * p->scale
+        80 * p->scale,  // Reduced width to fit better
+        12 * p->scale
     };
     
     // Health background (dark red)
@@ -1014,12 +1057,12 @@ void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats) {
     SDL_RenderFillRect(p->renderer, &health_bg);
     
     // Health progress (bright red)
-    int health_width = (int)((float)stats->health / stats->max_health * 100.0f * p->scale);
+    int health_width = (int)((float)stats->health / stats->max_health * 80.0f * p->scale);
     SDL_Rect health_progress = {
         health_start_x,
         p->level_up_button.y,
         health_width,
-        16 * p->scale
+        12 * p->scale
     };
     SDL_SetRenderDrawColor(p->renderer, 255, 0, 0, 255);
     SDL_RenderFillRect(p->renderer, &health_progress);
@@ -1040,9 +1083,9 @@ void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats) {
     // Experience bar with background and progress  
     SDL_Rect exp_bg = {
         health_start_x,
-        p->level_up_button.y + 20 * p->scale,
-        100 * p->scale,  // Reduced width to match health bar
-        16 * p->scale
+        p->level_up_button.y + 16 * p->scale,
+        80 * p->scale,  // Reduced width to match health bar
+        12 * p->scale
     };
     
     // Experience background (dark blue)
@@ -1055,12 +1098,12 @@ void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats) {
     if (exp_percentage > 1.0f) {
         exp_percentage = 1.0f;  // Cap visual bar at 100%
     }
-    int exp_width = (int)(exp_percentage * 100.0f * p->scale);
+    int exp_width = (int)(exp_percentage * 80.0f * p->scale);
     SDL_Rect exp_progress = {
         health_start_x,
-        p->level_up_button.y + 20 * p->scale,
+        p->level_up_button.y + 16 * p->scale,
         exp_width,
-        16 * p->scale
+        12 * p->scale
     };
     SDL_SetRenderDrawColor(p->renderer, 0, 100, 255, 255);
     SDL_RenderFillRect(p->renderer, &exp_progress);

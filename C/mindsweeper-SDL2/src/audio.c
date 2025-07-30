@@ -89,30 +89,30 @@ bool audio_load_sounds(AudioSystem *audio) {
         return false;
     }
 
-    // Load background music - use WAV format for consistency across platforms
+    // Load background music
+#ifdef WASM_BUILD
+    // In WASM, use WAV format for consistency
     audio->background_music = Mix_LoadMUS("assets/audio/crystal_cave_track.wav");
     if (!audio->background_music) {
         fprintf(stderr, "Warning: Failed to load crystal_cave_track.wav: %s\n", Mix_GetError());
-#ifdef WASM_BUILD
-        // WASM fallback
-        audio->background_music = Mix_LoadMUS("assets/audio/mc-lovin.wav");
-        if (!audio->background_music) {
-            fprintf(stderr, "Warning: Failed to load mc-lovin.wav as fallback: %s\n", Mix_GetError());
-        } else {
-            printf("Using mc-lovin.wav as background music fallback\n");
-        }
-#else
-        // Native fallback to FLAC
-        audio->background_music = Mix_LoadMUS("assets/audio/crystal_cave_track.flac");
-        if (!audio->background_music) {
-            fprintf(stderr, "Warning: Failed to load crystal_cave_track.flac as fallback: %s\n", Mix_GetError());
-        } else {
-            printf("Using crystal_cave_track.flac as background music fallback\n");
-        }
-#endif
     } else {
         printf("Background music loaded successfully (crystal_cave_track.wav)\n");
     }
+#else
+    // In native builds, try WAV first, then FLAC
+    audio->background_music = Mix_LoadMUS("assets/audio/crystal_cave_track.wav");
+    if (!audio->background_music) {
+        fprintf(stderr, "Warning: Failed to load crystal_cave_track.wav: %s\n", Mix_GetError());
+        audio->background_music = Mix_LoadMUS("assets/audio/crystal_cave_track.flac");
+        if (!audio->background_music) {
+            fprintf(stderr, "Warning: Failed to load crystal_cave_track.flac: %s\n", Mix_GetError());
+        } else {
+            printf("Background music loaded successfully (crystal_cave_track.flac)\n");
+        }
+    } else {
+        printf("Background music loaded successfully (crystal_cave_track.wav)\n");
+    }
+#endif
 
     // Load click sound
     audio->click_sound = Mix_LoadWAV("assets/audio/click.wav");
@@ -121,35 +121,28 @@ bool audio_load_sounds(AudioSystem *audio) {
         // Continue without click sound
     }
 
-    // Load crystal sound (try multiple formats)
+    // Load crystal sound
 #ifdef WASM_BUILD
-    // In WASM, use dedicated crystal WAV file
-    audio->crystal_sound = Mix_LoadWAV("assets/audio/crystal.wav");
-    if (!audio->crystal_sound) {
-        fprintf(stderr, "Warning: Failed to load crystal.wav: %s\n", Mix_GetError());
-        // Fallback to click.wav
-        audio->crystal_sound = Mix_LoadWAV("assets/audio/click.wav");
-        if (!audio->crystal_sound) {
-            fprintf(stderr, "Warning: Failed to load click.wav as fallback: %s\n", Mix_GetError());
-        } else {
-            printf("Using click.wav as crystal sound fallback\n");
-        }
-    } else {
-        printf("Crystal sound loaded successfully (WAV)\n");
-    }
-#else
-    // In native builds, try MP3 first
+    // In WASM, use MP3 format directly
     audio->crystal_sound = Mix_LoadWAV("assets/audio/crystal.mp3");
     if (!audio->crystal_sound) {
         fprintf(stderr, "Warning: Failed to load crystal.mp3: %s\n", Mix_GetError());
-        // Try alternative formats
-        audio->crystal_sound = Mix_LoadWAV("assets/audio/click.wav");
+    } else {
+        printf("Crystal sound loaded successfully (MP3)\n");
+    }
+#else
+    // In native builds, try MP3 first, then WAV as fallback
+    audio->crystal_sound = Mix_LoadWAV("assets/audio/crystal.mp3");
+    if (!audio->crystal_sound) {
+        fprintf(stderr, "Warning: Failed to load crystal.mp3: %s\n", Mix_GetError());
+        audio->crystal_sound = Mix_LoadWAV("assets/audio/crystal.wav");
         if (!audio->crystal_sound) {
-            fprintf(stderr, "Warning: Failed to load click.wav as fallback: %s\n", Mix_GetError());
-            // Continue without crystal sound
+            fprintf(stderr, "Warning: Failed to load crystal.wav: %s\n", Mix_GetError());
         } else {
-            printf("Using click.wav as crystal sound fallback\n");
+            printf("Crystal sound loaded successfully (WAV)\n");
         }
+    } else {
+        printf("Crystal sound loaded successfully (MP3)\n");
     }
 #endif
 

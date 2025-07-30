@@ -2,7 +2,9 @@
 #define CONFIG_H
 
 #include "main.h"
-#ifndef WASM_BUILD
+#ifdef WASM_BUILD
+#include "cJSON.h"
+#else
 #include <cjson/cJSON.h>
 #endif
 

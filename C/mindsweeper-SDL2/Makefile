@@ -7,9 +7,9 @@ CC				?= gcc
 ifdef WASM
 	CC			= emcc
 	TARGET		= index.html
-	WASM_CFLAGS	= -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2
+	WASM_CFLAGS	= -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2 -IcJSON-1.7.18
 	WASM_LDFLAGS = -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2 -s SDL2_IMAGE_FORMATS='["png"]' \
-				  -s SDL2_MIXER_FORMATS='["wav", "ogg"]' \
+				  -s SDL2_MIXER_FORMATS='["wav", "ogg", "mp3"]' \
 				  -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1gb \
 				  -s EXPORTED_FUNCTIONS='["_main"]' \
 				  -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
@@ -41,7 +41,13 @@ LDLIBS_RELEASE	= -flto
 LDLIBS_DEBUG	=
 
 SRCS			= $(wildcard $(SRC_DIR)/*.c)
+ifdef WASM
+SRCS			+= cJSON-1.7.18/cJSON.c
+endif
 OBJS			= $(addprefix $(BUILD_DIR)/, $(notdir $(SRCS:.c=.o)))
+ifdef WASM
+OBJS			+= $(BUILD_DIR)/cJSON.o
+endif
 DEPS			= $(OBJS:.o=.d)
 
 ifeq ($(OS),Windows_NT)
@@ -77,6 +83,11 @@ $(BUILD_DIR):
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
+ifdef WASM
+$(BUILD_DIR)/cJSON.o: cJSON-1.7.18/cJSON.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
+endif
+
 $(TARGET): $(OBJS)
 	$(CC) $^ -o $@ $(LDLIBS)
 
@@ -104,9 +115,9 @@ rebuild: clean all
 
 wasm: 
 	$(MAKE) clean
-	$(MAKE) all CC=emcc TARGET=index.html \
-		CFLAGS_BASE="-std=c11 -DWASM_BUILD -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2" \
-		LDLIBS_BASE="-s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2 -s SDL2_IMAGE_FORMATS='[\"png\"]' -s SDL2_MIXER_FORMATS='[\"wav\", \"ogg\"]' -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1gb -s EXPORTED_FUNCTIONS='[\"_main\"]' -s EXPORTED_RUNTIME_METHODS='[\"ccall\", \"cwrap\"]' --embed-file assets@/assets --shell-file shell_template.html"
+	$(MAKE) all WASM=1 CC=emcc TARGET=index.html \
+		CFLAGS_BASE="-std=c11 -DWASM_BUILD -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2 -IcJSON-1.7.18" \
+		LDLIBS_BASE="-s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2 -s SDL2_IMAGE_FORMATS='[\"png\"]' -s SDL2_MIXER_FORMATS='[\"wav\", \"ogg\", \"mp3\"]' -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1gb -s EXPORTED_FUNCTIONS='[\"_main\"]' -s EXPORTED_RUNTIME_METHODS='[\"ccall\", \"cwrap\"]' --embed-file assets@/assets --shell-file shell_template.html"
 
 serve: wasm
 	@echo "Starting web server on http://localhost:8000"

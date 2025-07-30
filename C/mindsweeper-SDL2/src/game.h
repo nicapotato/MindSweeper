@@ -116,7 +116,7 @@ bool player_panel_new(PlayerPanel **panel, SDL_Renderer *renderer, unsigned colu
 void player_panel_free(PlayerPanel **panel);
 void player_panel_set_scale(PlayerPanel *p, int scale);
 void player_panel_set_size(PlayerPanel *p, unsigned columns);
-void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats);
+void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats, const struct Game *g);
 bool player_panel_handle_click(PlayerPanel *p, int x, int y, struct Game *g);
 void player_panel_draw_text(const PlayerPanel *p, const char *text, int x, int y, SDL_Color color);
 

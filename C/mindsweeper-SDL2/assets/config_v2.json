@@ -8,7 +8,7 @@
     "cols": 14,
     
     "game_state": {
-        "starting_max_health": 9,
+        "starting_max_health": 200,
         "starting_max_experience": 5,
         "starting_level": 2,
         "default_music_enabled": false,
