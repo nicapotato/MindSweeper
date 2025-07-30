@@ -138,12 +138,9 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
         return false;
     }
     
-    // Check if tile is blocked by animation
+    // Check if tile is blocked by animation - block ALL clicks during animations
     if (board_is_tile_animating(g->board, row, col)) {
-        size_t index = (size_t)(row * g->board->columns + col);
-        if (g->board->animations[index].blocks_input) {
-            return false; // Input blocked during animation
-        }
+        return true; // Input blocked during animation, but this is not an error
     }
     
     // Play crystal sound effect on tile click
