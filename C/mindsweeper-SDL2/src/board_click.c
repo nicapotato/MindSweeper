@@ -6,7 +6,7 @@
 #include "audio.h"
 
 // Forward declarations
-void board_finish_animation(struct Board *b, unsigned row, unsigned col);
+void board_finish_animation(struct Board *b, unsigned row, unsigned col, struct Game *g);
 
 void board_start_animation(struct Board *b, unsigned row, unsigned col, 
                           AnimationType type, Uint32 duration_ms, bool blocks_input, TileState original_state) {
@@ -86,7 +86,7 @@ void board_start_animation(struct Board *b, unsigned row, unsigned col,
     b->display_sprites[index] = anim->start_sprite;
 }
 
-void board_finish_animation(struct Board *b, unsigned row, unsigned col) {
+void board_finish_animation(struct Board *b, unsigned row, unsigned col, struct Game *g) {
     size_t index = (size_t)(row * b->columns + col);
     TileAnimation *anim = &b->animations[index];
     
@@ -103,6 +103,12 @@ void board_finish_animation(struct Board *b, unsigned row, unsigned col) {
             Entity *entity = config_get_entity(config, current_entity_id);
             
             if (entity) {
+                // Check for victory condition: Entity 13 (final boss) defeated and player still alive
+                if (entity->id == 13 && g && g->player.health > 0 && !g->victory_info.is_victory) {
+                    printf("🎉 FINAL BOSS DEFEATED! Player victorious! 🎉\n");
+                    game_set_victory(g, entity->name);
+                }
+                
                 // Use random choice for entity transition (handles both simple and random transitions)
                 unsigned new_entity_id = choose_random_entity_transition(entity);
                 printf("Combat transition: %u -> %u\n", current_entity_id, new_entity_id);
@@ -132,6 +138,12 @@ void board_finish_animation(struct Board *b, unsigned row, unsigned col) {
         Entity *entity = config_get_entity(config, current_entity_id);
         
         if (entity) {
+            // Check for victory condition: Entity 13 (final boss) defeated and player still alive
+            if (entity->id == 13 && g && g->player.health > 0 && !g->victory_info.is_victory) {
+                printf("🎉 FINAL BOSS DEFEATED! Player victorious! 🎉\n");
+                game_set_victory(g, entity->name);
+            }
+            
             // Use random choice for entity transition (handles both simple and random transitions)
             unsigned new_entity_id = choose_random_entity_transition(entity);
             printf("Combat transition: %u -> %u\n", current_entity_id, new_entity_id);

@@ -37,6 +37,12 @@ typedef struct {
     char death_cause[MAX_ENTITY_NAME];  // Name of entity that killed player
 } GameOverInfo;
 
+// Victory information
+typedef struct {
+    bool is_victory;
+    char victory_message[MAX_ENTITY_NAME];  // Victory message or final boss name
+} VictoryInfo;
+
 // Player panel for displaying stats
 typedef struct {
     SDL_Renderer *renderer;
@@ -76,6 +82,7 @@ struct Game {
         bool is_running;
         bool is_fullscreen;           // Fullscreen mode state
         GameOverInfo game_over_info;  // Replaced simple boolean with detailed info
+        VictoryInfo victory_info;     // Victory state information
         unsigned rows;
         unsigned columns;
         int scale;
@@ -131,5 +138,11 @@ void game_check_game_over(struct Game *g);
 void game_set_game_over(struct Game *g, const char *entity_name);
 void game_draw_game_over_popup(const struct Game *g);
 void game_reset_game_over(struct Game *g);
+
+// Victory functions
+void game_check_victory(struct Game *g);
+void game_set_victory(struct Game *g, const char *victory_message);
+void game_draw_victory_popup(const struct Game *g);
+void game_reset_victory(struct Game *g);
 
 #endif

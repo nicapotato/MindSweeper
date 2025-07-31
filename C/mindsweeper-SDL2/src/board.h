@@ -123,7 +123,7 @@ TileState board_get_tile_state(const struct Board *b, unsigned row, unsigned col
 void board_set_tile_state(struct Board *b, unsigned row, unsigned col, TileState state);
 
 // Animation system
-void board_update_animations(struct Board *b);
+void board_update_animations(struct Board *b, struct Game *g);
 bool board_is_tile_animating(const struct Board *b, unsigned row, unsigned col);
 unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsigned row, unsigned col, SpriteType sprite_type);
 unsigned get_tile_sprite_index(const struct Board *b, unsigned row, unsigned col);

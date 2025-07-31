@@ -39,6 +39,10 @@ bool audio_init(AudioSystem *audio) {
     audio->background_music = NULL;
     audio->click_sound = NULL;
     audio->crystal_sound = NULL;
+    audio->level_up_sound = NULL;      // New sound
+    audio->mclovin_sound = NULL;       // New sound
+    audio->death_sound = NULL;         // New sound
+    audio->victory_sound = NULL;       // New sound
     audio->music_enabled = true;
     audio->sound_enabled = true;
     audio->music_volume = MIX_MAX_VOLUME / 4;  // 50% volume
@@ -77,6 +81,26 @@ void audio_cleanup(AudioSystem *audio) {
         audio->crystal_sound = NULL;
     }
 
+    if (audio->level_up_sound) {
+        Mix_FreeChunk(audio->level_up_sound);
+        audio->level_up_sound = NULL;
+    }
+
+    if (audio->mclovin_sound) {
+        Mix_FreeChunk(audio->mclovin_sound);
+        audio->mclovin_sound = NULL;
+    }
+
+    if (audio->death_sound) {
+        Mix_FreeChunk(audio->death_sound);
+        audio->death_sound = NULL;
+    }
+
+    if (audio->victory_sound) {
+        Mix_FreeChunk(audio->victory_sound);
+        audio->victory_sound = NULL;
+    }
+
     // Close SDL2_mixer
     Mix_CloseAudio();
     Mix_Quit();
@@ -90,29 +114,12 @@ bool audio_load_sounds(AudioSystem *audio) {
     }
 
     // Load background music
-#ifdef WASM_BUILD
-    // In WASM, use WAV format for consistency
-    audio->background_music = Mix_LoadMUS("assets/audio/crystal_cave_track.wav");
+    audio->background_music = Mix_LoadMUS("assets/audio/crystal_cave_track.mp3");
     if (!audio->background_music) {
-        fprintf(stderr, "Warning: Failed to load crystal_cave_track.wav: %s\n", Mix_GetError());
+        fprintf(stderr, "Warning: Failed to load crystal_cave_track.mp3: %s\n", Mix_GetError());
     } else {
-        printf("Background music loaded successfully (crystal_cave_track.wav)\n");
+        printf("Background music loaded successfully (crystal_cave_track.mp3)\n");
     }
-#else
-    // In native builds, try WAV first, then FLAC
-    audio->background_music = Mix_LoadMUS("assets/audio/crystal_cave_track.wav");
-    if (!audio->background_music) {
-        fprintf(stderr, "Warning: Failed to load crystal_cave_track.wav: %s\n", Mix_GetError());
-        audio->background_music = Mix_LoadMUS("assets/audio/crystal_cave_track.flac");
-        if (!audio->background_music) {
-            fprintf(stderr, "Warning: Failed to load crystal_cave_track.flac: %s\n", Mix_GetError());
-        } else {
-            printf("Background music loaded successfully (crystal_cave_track.flac)\n");
-        }
-    } else {
-        printf("Background music loaded successfully (crystal_cave_track.wav)\n");
-    }
-#endif
 
     // Load click sound
     audio->click_sound = Mix_LoadWAV("assets/audio/click.wav");
@@ -122,29 +129,44 @@ bool audio_load_sounds(AudioSystem *audio) {
     }
 
     // Load crystal sound
-#ifdef WASM_BUILD
-    // In WASM, use MP3 format directly
     audio->crystal_sound = Mix_LoadWAV("assets/audio/crystal.mp3");
     if (!audio->crystal_sound) {
-        fprintf(stderr, "Warning: Failed to load crystal.mp3: %s\n", Mix_GetError());
+        fprintf(stderr, "Warning: Failed to load crystal.wav: %s\n", Mix_GetError());
     } else {
-        printf("Crystal sound loaded successfully (MP3)\n");
+        printf("Crystal sound loaded successfully (WAV)\n");
     }
-#else
-    // In native builds, try MP3 first, then WAV as fallback
-    audio->crystal_sound = Mix_LoadWAV("assets/audio/crystal.mp3");
-    if (!audio->crystal_sound) {
-        fprintf(stderr, "Warning: Failed to load crystal.mp3: %s\n", Mix_GetError());
-        audio->crystal_sound = Mix_LoadWAV("assets/audio/crystal.wav");
-        if (!audio->crystal_sound) {
-            fprintf(stderr, "Warning: Failed to load crystal.wav: %s\n", Mix_GetError());
-        } else {
-            printf("Crystal sound loaded successfully (WAV)\n");
-        }
+
+    // Load level up sound
+    audio->level_up_sound = Mix_LoadWAV("assets/audio/level-up.mp3");
+    if (!audio->level_up_sound) {
+        fprintf(stderr, "Warning: Failed to load level-up.mp3: %s\n", Mix_GetError());
     } else {
-        printf("Crystal sound loaded successfully (MP3)\n");
+        printf("Level up sound loaded successfully (MP3)\n");
     }
-#endif
+
+    // Load mclovin sound
+    audio->mclovin_sound = Mix_LoadWAV("assets/audio/mclovin.mp3");
+    if (!audio->mclovin_sound) {
+        fprintf(stderr, "Warning: Failed to load mclovin.mp3: %s\n", Mix_GetError());
+    } else {
+        printf("McLovin sound loaded successfully (MP3)\n");
+    }
+
+    // Load death sound
+    audio->death_sound = Mix_LoadWAV("assets/audio/mleb-1.mp3");
+    if (!audio->death_sound) {
+        fprintf(stderr, "Warning: Failed to load mleb-1.mp3: %s\n", Mix_GetError());
+    } else {
+        printf("Death sound loaded successfully (MP3)\n");
+    }
+
+    // Load victory sound
+    audio->victory_sound = Mix_LoadWAV("assets/audio/mleb-2.mp3");
+    if (!audio->victory_sound) {
+        fprintf(stderr, "Warning: Failed to load mleb-2.mp3: %s\n", Mix_GetError());
+    } else {
+        printf("Victory sound loaded successfully (MP3)\n");
+    }
 
     // Set initial volumes
     if (audio->click_sound) {
@@ -152,6 +174,18 @@ bool audio_load_sounds(AudioSystem *audio) {
     }
     if (audio->crystal_sound) {
         Mix_VolumeChunk(audio->crystal_sound, audio->sound_volume);
+    }
+    if (audio->level_up_sound) {
+        Mix_VolumeChunk(audio->level_up_sound, audio->sound_volume);
+    }
+    if (audio->mclovin_sound) {
+        Mix_VolumeChunk(audio->mclovin_sound, audio->sound_volume);
+    }
+    if (audio->death_sound) {
+        Mix_VolumeChunk(audio->death_sound, audio->sound_volume);
+    }
+    if (audio->victory_sound) {
+        Mix_VolumeChunk(audio->victory_sound, audio->sound_volume);
     }
 
     printf("Audio loading completed\n");
@@ -241,6 +275,18 @@ void audio_set_sound_volume(AudioSystem *audio, int volume) {
     if (audio->crystal_sound) {
         Mix_VolumeChunk(audio->crystal_sound, volume);
     }
+    if (audio->level_up_sound) {
+        Mix_VolumeChunk(audio->level_up_sound, volume);
+    }
+    if (audio->mclovin_sound) {
+        Mix_VolumeChunk(audio->mclovin_sound, volume);
+    }
+    if (audio->death_sound) {
+        Mix_VolumeChunk(audio->death_sound, volume);
+    }
+    if (audio->victory_sound) {
+        Mix_VolumeChunk(audio->victory_sound, volume);
+    }
 }
 
 void audio_toggle_music(AudioSystem *audio) {
@@ -268,4 +314,36 @@ void audio_toggle_sound(AudioSystem *audio) {
 
     audio->sound_enabled = !audio->sound_enabled;
     printf("Sound effects %s\n", audio->sound_enabled ? "enabled" : "disabled");
+}
+
+void audio_play_level_up_sound(AudioSystem *audio) {
+    if (!audio || !audio->sound_enabled || !audio->level_up_sound) {
+        return;
+    }
+
+    Mix_PlayChannel(-1, audio->level_up_sound, 0);
+}
+
+void audio_play_mclovin_sound(AudioSystem *audio) {
+    if (!audio || !audio->sound_enabled || !audio->mclovin_sound) {
+        return;
+    }
+
+    Mix_PlayChannel(-1, audio->mclovin_sound, 0);
+}
+
+void audio_play_death_sound(AudioSystem *audio) {
+    if (!audio || !audio->sound_enabled || !audio->death_sound) {
+        return;
+    }
+
+    Mix_PlayChannel(-1, audio->death_sound, 0);
+}
+
+void audio_play_victory_sound(AudioSystem *audio) {
+    if (!audio || !audio->sound_enabled || !audio->victory_sound) {
+        return;
+    }
+
+    Mix_PlayChannel(-1, audio->victory_sound, 0);
 } 

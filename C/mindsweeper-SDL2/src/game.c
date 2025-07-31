@@ -55,6 +55,10 @@ bool game_new(struct Game **game) {
     g->is_fullscreen = false;         // Initialize fullscreen state
     g->game_over_info.is_game_over = false;  // Initialize game over info
     g->game_over_info.death_cause[0] = '\0'; // Empty death cause string
+    
+    // Initialize victory info
+    g->victory_info.is_victory = false;
+    g->victory_info.victory_message[0] = '\0'; // Clear victory message
     g->rows = DEFAULT_BOARD_ROWS;      // Use constant instead of magic number
     g->columns = DEFAULT_BOARD_COLS;   // Use constant instead of magic number
     
@@ -348,6 +352,8 @@ bool game_events(struct Game *g) {
             case SDL_SCANCODE_SPACE:
                 if (g->game_over_info.is_game_over) {
                     game_reset_game_over(g);
+                } else if (g->victory_info.is_victory) {
+                    game_reset_victory(g);
                 } else {
                     if (!game_load_map(g))
                         return false;
@@ -449,7 +455,7 @@ bool game_events(struct Game *g) {
 
 void game_update(struct Game *g) {
     // Update board animations
-    board_update_animations(g->board);
+    board_update_animations(g->board, g);
     
     // Update other game systems
     clock_update(g->clock);
@@ -469,6 +475,9 @@ void game_draw(const struct Game *g) {
             
             // Draw game over popup if needed
             game_draw_game_over_popup(g);
+            
+            // Draw victory popup if needed
+            game_draw_victory_popup(g);
             break;
             
         case SCREEN_ENTITIES:
@@ -610,6 +619,9 @@ void game_level_up_player(struct Game *g) {
         g->player.health = g->player.max_health; // Full heal on level up
         g->player.exp_to_next_level = game_calculate_exp_requirement(g->player.level);
         
+        // Play level-up sound effect
+        audio_play_level_up_sound(&g->audio);
+        
         printf("LEVEL UP! Player is now level %u with %u health (excess exp: %u)\n", 
                g->player.level, g->player.max_health, excess_exp);
     }
@@ -710,8 +722,11 @@ void game_set_game_over(struct Game *g, const char *entity_name) {
         strcpy(g->game_over_info.death_cause, "Unknown");
     }
     
+    // Play death sound effect
+    audio_play_death_sound(&g->audio);
+    
     printf("=== GAME OVER ===\n");
-    printf("Death by %s! Press SPACE to restart.\n", g->game_over_info.death_cause);
+
     face_lost(g->face);  // Set sad face
 }
 
@@ -799,6 +814,126 @@ void game_reset_game_over(struct Game *g) {
     printf("Game restarted!\n");
 }
 
+// ========== VICTORY FUNCTIONS ==========
+
+void game_check_victory(struct Game *g) {
+    // Victory is checked specifically when entity 13 (final boss) is defeated
+    // This function can be called after combat resolution
+    if (g->victory_info.is_victory) {
+        return; // Already won
+    }
+    
+    // Victory will be set explicitly when final boss is defeated
+}
+
+void game_set_victory(struct Game *g, const char *victory_message) {
+    g->victory_info.is_victory = true;
+    
+    // Copy the victory message safely
+    if (victory_message) {
+        strncpy(g->victory_info.victory_message, victory_message, MAX_ENTITY_NAME - 1);
+        g->victory_info.victory_message[MAX_ENTITY_NAME - 1] = '\0'; // Ensure null termination
+    } else {
+        strcpy(g->victory_info.victory_message, "Ancient Meeoeomoower");
+    }
+    
+    // Play victory sound effect
+    audio_play_victory_sound(&g->audio);
+    
+    printf("=== VICTORY! ===\n");
+    printf("Defeated %s! You are victorious!\n", g->victory_info.victory_message);
+
+    face_won(g->face);  // Set happy face
+}
+
+void game_draw_victory_popup(const struct Game *g) {
+    if (!g->victory_info.is_victory) {
+        return;
+    }
+    
+    // Calculate popup dimensions - similar to game over popup
+    int popup_width = 250 * g->scale;
+    int popup_height = 100 * g->scale;
+    int popup_x = (g->board->rect.x + g->board->rect.w / 2) - (popup_width / 2);
+    int popup_y = (g->board->rect.y + g->board->rect.h / 2) - (popup_height / 2);
+    
+    // Draw semi-transparent overlay only around the popup area
+    SDL_SetRenderDrawBlendMode(g->renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 120);  // Semi-transparent black
+    SDL_Rect overlay = {
+        popup_x - 10 * g->scale, 
+        popup_y - 10 * g->scale, 
+        popup_width + 20 * g->scale, 
+        popup_height + 20 * g->scale
+    };
+    SDL_RenderFillRect(g->renderer, &overlay);
+    
+    // Draw popup background (light golden)
+    SDL_SetRenderDrawBlendMode(g->renderer, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(g->renderer, 255, 250, 205, 255); // Light golden background
+    SDL_Rect popup_bg = {popup_x, popup_y, popup_width, popup_height};
+    SDL_RenderFillRect(g->renderer, &popup_bg);
+    
+    // Draw popup border (gold)
+    SDL_SetRenderDrawColor(g->renderer, 218, 165, 32, 255); // Gold border
+    SDL_RenderDrawRect(g->renderer, &popup_bg);
+    
+    // Draw inner border (white highlight)
+    SDL_SetRenderDrawColor(g->renderer, 255, 255, 255, 255);
+    SDL_Rect inner_border = {
+        popup_x + 1,
+        popup_y + 1,
+        popup_width - 2,
+        popup_height - 2
+    };
+    SDL_RenderDrawRect(g->renderer, &inner_border);
+    
+    // Draw victory message
+    if (g->player_panel && g->player_panel->font) {
+        SDL_Color gold = {218, 165, 32, 255};
+        SDL_Color dark_green = {0, 120, 0, 255};
+        
+        int text_x = popup_x + 10 * g->scale;
+        int text_y = popup_y + 8 * g->scale;
+        
+        // Draw "VICTORY!" text
+        player_panel_draw_text(g->player_panel, "VICTORY!", 
+                              text_x, text_y, gold);
+        
+        // Draw victory message
+        char victory_message[128];
+        snprintf(victory_message, sizeof(victory_message), "Defeated %s!", g->victory_info.victory_message);
+        player_panel_draw_text(g->player_panel, victory_message, 
+                              text_x, text_y + 18 * g->scale, dark_green);
+        
+        // Draw restart instruction
+        player_panel_draw_text(g->player_panel, "Press SPACE to restart", 
+                              text_x, text_y + 36 * g->scale, dark_green);
+        
+        // Draw congratulations message
+        player_panel_draw_text(g->player_panel, "You are victorious!", 
+                              text_x, text_y + 54 * g->scale, dark_green);
+    }
+    
+    // Reset render color
+    SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255);
+}
+
+void game_reset_victory(struct Game *g) {
+    g->victory_info.is_victory = false;
+    g->victory_info.victory_message[0] = '\0'; // Clear victory message
+    
+    // Reset player stats
+    game_init_player_stats(g);
+    
+    // Reset game board
+    if (!game_load_map(g)) {
+        printf("Warning: Failed to load new map\n");
+    }
+    
+    printf("Game restarted after victory!\n");
+}
+
 // ========== PLAYER PANEL FUNCTIONS ==========
 
 bool player_panel_new(PlayerPanel **panel, SDL_Renderer *renderer, unsigned columns, int scale) {
@@ -880,8 +1015,8 @@ void player_panel_set_scale(PlayerPanel *p, int scale) {
     // Set up level-up button position (left side) - smaller button for compact layout
     p->level_up_button.x = p->rect.x + 4 * p->scale;
     p->level_up_button.y = p->rect.y + 4 * p->scale;
-    p->level_up_button.w = (PIECE_SIZE * 1.2) * p->scale; // Slightly smaller button
-    p->level_up_button.h = (PIECE_SIZE * 1.2) * p->scale; // Slightly smaller button
+    p->level_up_button.w = (int)((PIECE_SIZE * 1.2) * p->scale); // Slightly smaller button
+    p->level_up_button.h = (int)((PIECE_SIZE * 1.2) * p->scale); // Slightly smaller button
 }
 
 void player_panel_set_size(PlayerPanel *p, unsigned columns) {
@@ -1096,6 +1231,16 @@ bool player_panel_handle_click(PlayerPanel *p, int x, int y, struct Game *g) {
         
         printf("Level-up button clicked!\n");
         game_level_up_player(g);
+        return true;
+    }
+    
+    // Check if click is on character sprite but player can't level up
+    if (!p->can_level_up &&
+        x >= p->level_up_button.x && x < p->level_up_button.x + p->level_up_button.w &&
+        y >= p->level_up_button.y && y < p->level_up_button.y + p->level_up_button.h) {
+        
+        printf("Character sprite clicked but can't level up - playing McLovin sound\n");
+        audio_play_mclovin_sound(&g->audio);
         return true;
     }
     

@@ -358,7 +358,7 @@ bool board_is_tile_animating(const struct Board *b, unsigned row, unsigned col) 
     return b->animations[index].type != ANIM_NONE;
 }
 
-void board_update_animations(struct Board *b) {
+void board_update_animations(struct Board *b, struct Game *g) {
     Uint32 current_time = SDL_GetTicks();
     
     for (unsigned r = 0; r < b->rows; r++) {
@@ -369,7 +369,7 @@ void board_update_animations(struct Board *b) {
             if (anim->type != ANIM_NONE) {
                 if (current_time >= anim->start_time + anim->duration_ms) {
                     // Animation finished
-                    board_finish_animation(b, r, c);
+                    board_finish_animation(b, r, c, g);
                 } else {
                     // Update animation progress
                     float progress = (float)(current_time - anim->start_time) / anim->duration_ms;

@@ -9,7 +9,7 @@ ifdef WASM
 	TARGET		= index.html
 	WASM_CFLAGS	= -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2 -IcJSON-1.7.18
 	WASM_LDFLAGS = -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_MIXER=2 -s SDL2_IMAGE_FORMATS='["png"]' \
-				  -s SDL2_MIXER_FORMATS='["wav", "ogg", "mp3"]' \
+				  -s SDL2_MIXER_FORMATS='["wav", "mp3"]' \
 				  -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1gb \
 				  -s EXPORTED_FUNCTIONS='["_main"]' \
 				  -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
