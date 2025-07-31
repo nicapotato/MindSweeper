@@ -12,7 +12,7 @@ static struct Game *g_game = NULL;
 
 bool game_create_string(char **game_str, const char *new_str);
 void game_set_title(struct Game *g);
-bool game_reset(struct Game *g);
+bool game_load_map(struct Game *g);
 void game_set_scale(struct Game *g);
 void game_toggle_scale(struct Game *g);
 void game_set_theme(struct Game *g, unsigned theme);
@@ -81,23 +81,6 @@ bool game_new(struct Game **game) {
     // Initialize admin panel with solution count first
     g->admin.total_solutions = config_count_solutions("assets/solutions_1_n_20.json");
     printf("Total solutions available: %u\n", g->admin.total_solutions);
-    
-    // Pick a random solution index for initial load
-    unsigned initial_solution_index = 0;
-    if (g->admin.total_solutions > 0) {
-        initial_solution_index = (unsigned)(rand() % (int)g->admin.total_solutions);
-    }
-    g->admin.current_solution_index = initial_solution_index;
-    
-    // Load solution data
-#ifdef WASM_BUILD
-    if (!board_load_solution(g->board, "assets/solutions_1_n_20.json", initial_solution_index)) {
-#else
-    if (!board_load_solution(g->board, "assets/solutions_1_n_20.json", initial_solution_index)) {
-#endif
-        fprintf(stderr, "Failed to load solution data\n");
-        goto cleanup_failure;
-    }
 
     if (!clock_new(&g->clock, g->renderer, g->columns, g->scale)) {
         goto cleanup_failure;
@@ -115,7 +98,11 @@ bool game_new(struct Game **game) {
         goto cleanup_failure;
     }
 
-    game_set_title(g);
+    // Load initial map using the standard map loading function (after all components are initialized)
+    if (!game_load_map(g)) {
+        fprintf(stderr, "Failed to load initial map\n");
+        goto cleanup_failure;
+    }
     
     // Initialize player stats and admin panel
     game_init_player_stats(g);
@@ -209,8 +196,8 @@ void game_set_title(struct Game *g) {
     free(title);
 }
 
-bool game_reset(struct Game *g) {
-    printf("Game reset requested. Current solution: %u, Total solutions: %u\n", 
+bool game_load_map(struct Game *g) {
+    printf("Loading new map. Current solution: %u, Total solutions: %u\n", 
            g->admin.current_solution_index, g->admin.total_solutions);
     
     // Always pick a random solution index for variety
@@ -219,19 +206,20 @@ bool game_reset(struct Game *g) {
     
     // Load the new solution
     if (!board_load_solution(g->board, "assets/solutions_1_n_20.json", new_solution_index)) {
-        fprintf(stderr, "Failed to load random solution %u during reset\n", new_solution_index);
+        fprintf(stderr, "Failed to load random solution %u\n", new_solution_index);
         // Fallback to regular reset if loading fails
         if (!board_reset(g->board)) {
             return false;
         }
     } else {
         g->admin.current_solution_index = new_solution_index;
-        printf("Reset: Loaded random solution %u\n", new_solution_index);
+        printf("Loaded random solution %u\n", new_solution_index);
     }
 
     // Update window title to reflect new solution index
     game_set_title(g);
 
+    // Reset game state for new map
     clock_reset(g->clock);
     face_default(g->face);
     g->game_over_info.is_game_over = false;  // Reset game over state
@@ -288,7 +276,7 @@ bool game_set_size(struct Game *g, unsigned rows, unsigned columns, int scale,
 
     game_set_title(g);
 
-    if (!game_reset(g)) {
+    if (!game_load_map(g)) {
         return false;
     }
 
@@ -364,7 +352,7 @@ bool game_events(struct Game *g) {
                 if (g->game_over_info.is_game_over) {
                     game_reset_game_over(g);
                 } else {
-                    if (!game_reset(g))
+                    if (!game_load_map(g))
                         return false;
                 }
                 break;
@@ -717,7 +705,7 @@ bool game_admin_load_map(struct Game *g, unsigned solution_index) {
         // Update window title to reflect new solution index
         game_set_title(g);
         
-        // Reset game state for new map (but don't change solution again)
+        // Reset game state for new map
         clock_reset(g->clock);
         face_default(g->face);
         g->game_over_info.is_game_over = false;  // Reset game over state
@@ -847,8 +835,8 @@ void game_reset_game_over(struct Game *g) {
     game_init_player_stats(g);
     
     // Reset game board
-    if (!game_reset(g)) {
-        printf("Warning: Failed to reset game board\n");
+    if (!game_load_map(g)) {
+        printf("Warning: Failed to load new map\n");
     }
     
     printf("Game restarted!\n");

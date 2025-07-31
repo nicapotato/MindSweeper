@@ -2,11 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef WASM_BUILD
-#include "cJSON.h"
-#else
-#include <cjson/cJSON.h>
-#endif
+#include "../cJSON-1.7.18/cJSON.h"
 
 // Unified file reading function for both WASM and native builds
 static char* read_file_contents(const char *filename) {
@@ -34,14 +30,6 @@ static char* read_file_contents(const char *filename) {
 }
 
 bool config_load(GameConfig *config, const char *config_file) {
-    printf("[CONFIG] Using cJSON for config loading (WASM_BUILD=%d)\n", (int)(
-#ifdef WASM_BUILD
-1
-#else
-0
-#endif
-));
-    
     char *content = read_file_contents(config_file);
     if (!content) {
         return false;

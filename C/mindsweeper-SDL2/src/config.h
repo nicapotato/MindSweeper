@@ -2,11 +2,7 @@
 #define CONFIG_H
 
 #include "main.h"
-#ifdef WASM_BUILD
-#include "cJSON.h"
-#else
-#include <cjson/cJSON.h>
-#endif
+#include "../cJSON-1.7.18/cJSON.h"
 
 // Entity data structure
 typedef struct {

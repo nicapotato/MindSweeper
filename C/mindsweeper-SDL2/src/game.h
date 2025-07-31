@@ -85,6 +85,9 @@ bool game_new(struct Game **game);
 void game_free(struct Game **game);
 bool game_run(struct Game *g);
 
+// Map loading function
+bool game_load_map(struct Game *g);
+
 // Player stats functions
 void game_init_player_stats(struct Game *g);
 void game_update_player_health(struct Game *g, int health_change);
