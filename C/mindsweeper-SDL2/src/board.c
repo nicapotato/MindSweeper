@@ -437,6 +437,46 @@ unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsig
     return SPRITE_CLEARED;
 }
 
+/**
+ * @brief Get the appropriate tile sprite index based on tile state and entity information
+ * @param b Pointer to the board
+ * @param row Row index
+ * @param col Column index
+ * @return Tile sprite index (0-3 based on requirements)
+ */
+unsigned get_tile_sprite_index(const struct Board *b, unsigned row, unsigned col) {
+    size_t index = (size_t)(row * b->columns + col);
+    TileState tile_state = b->tile_states[index];
+    unsigned entity_id = b->entity_ids[index];
+    
+    unsigned tile_sprite = 0;
+    
+    if (tile_state == TILE_HIDDEN) {
+        // Hidden tile - sprite 0
+        tile_sprite = 0;
+    } else {
+        // Revealed tile
+        if (entity_id == 0) {
+            // Empty tile - always use sprite 3 (revealed and empty)
+            tile_sprite = 3;
+        } else {
+            // Entity tile - check if entity is friendly (level = 0) or hostile
+            Entity *entity = config_get_entity(&g_config, entity_id);
+            if (entity && entity->level == 0) {
+                // Revealed and friendly (level = 0) - sprite 2
+                tile_sprite = 2;
+            } else {
+                // Revealed and hostile - sprite 4
+                tile_sprite = 4;
+            }
+        }
+    }
+    
+
+    
+    return tile_sprite;
+}
+
 void board_draw(const struct Board *b) {
     SDL_Rect dest_rect = {0, 0, b->piece_size, b->piece_size};
     
@@ -448,12 +488,24 @@ void board_draw(const struct Board *b) {
             size_t index = (size_t)(r * b->columns + c);
             TileState tile_state = b->tile_states[index];
             
-            if (tile_state == TILE_HIDDEN) {
-                // First render the base hidden tile (index 0) - grey tile with light grey border
+            // Get the appropriate tile sprite index based on tile state and entity
+            unsigned tile_sprite_index = get_tile_sprite_index(b, r, c);
+            
+            // Render the base tile sprite first
+            if (tile_sprite_index < 256) { // Assuming max 256 sprites in tile sheet
                 SDL_RenderCopy(b->renderer, b->tile_sprites,
-                               &b->tile_src_rects[0], &dest_rect);
-                
-                // Then render the variation tile (indices 5-7) on top with rotation
+                               &b->tile_src_rects[tile_sprite_index], &dest_rect);
+            }
+            
+            // Render black border around each tile
+            SDL_SetRenderDrawColor(b->renderer, 0, 0, 0, 255); // Black
+            SDL_RenderDrawRect(b->renderer, &dest_rect);
+            
+            // Reset render color to default
+            SDL_SetRenderDrawColor(b->renderer, 0, 0, 0, 255);
+            
+            if (tile_state == TILE_HIDDEN) {
+                // For hidden tiles, add variation and rotation on top
                 unsigned tile_variation = b->tile_variations[index];
                 unsigned rotation = b->tile_rotations[index];
                 
@@ -468,28 +520,7 @@ void board_draw(const struct Board *b) {
                                    angle, &center, SDL_FLIP_NONE);
                 }
             } else {
-                // TILE_REVEALED: render dark grey border, light grey background, then entity sprite
-                
-                // Create border rectangle (slightly larger than tile)
-
-                SDL_Rect border_rect = dest_rect;
-                border_rect.x -= 1;
-                border_rect.y -= 1;
-                border_rect.w += 4;
-                border_rect.h += 4;
-                
-                // Render dark grey border
-                SDL_SetRenderDrawColor(b->renderer, 100, 100, 100, 255); // Dark grey
-                SDL_RenderFillRect(b->renderer, &border_rect);
-                
-                // Render light grey background (slightly smaller than border)
-                SDL_SetRenderDrawColor(b->renderer, 200, 200, 200, 255); // Light grey
-                SDL_RenderFillRect(b->renderer, &dest_rect);
-                
-                // Reset render color to default
-                SDL_SetRenderDrawColor(b->renderer, 0, 0, 0, 255);
-                
-                // Render entity sprite on top or threat level for empty tiles
+                // TILE_REVEALED: render entity sprite or threat level on top of tile
                 unsigned sprite_index = b->display_sprites[index];
                 unsigned entity_id = b->entity_ids[index];
                 
@@ -510,7 +541,7 @@ void board_draw(const struct Board *b) {
                         board_draw_threat_level_text_centered(b, threat_text, dest_rect);
                     }
                 } else {
-                    // Render entity sprite for non-empty tiles
+                    // Render entity sprite for non-empty tiles (z-axis priority)
                     // Ensure sprite index is valid
                     if (sprite_index < 256) { // Assuming max 256 sprites in sheet
                         SDL_RenderCopy(b->renderer, b->entity_sprites,

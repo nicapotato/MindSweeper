@@ -120,6 +120,7 @@ void board_set_tile_state(struct Board *b, unsigned row, unsigned col, TileState
 void board_update_animations(struct Board *b);
 bool board_is_tile_animating(const struct Board *b, unsigned row, unsigned col);
 unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsigned row, unsigned col);
+unsigned get_tile_sprite_index(const struct Board *b, unsigned row, unsigned col);
 
 // Game logic
 bool board_load_solution(struct Board *b, const char *solution_file, unsigned solution_index);
