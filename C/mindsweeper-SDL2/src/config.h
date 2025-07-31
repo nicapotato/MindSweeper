@@ -21,6 +21,13 @@ typedef struct {
         unsigned y;
     } sprite_pos;
     
+    // Additional sprite position for revealed-hostile state (for mimics)
+    struct {
+        unsigned x;
+        unsigned y;
+        bool has_hostile_sprite;  // Whether this entity has a revealed-hostile sprite
+    } hostile_sprite_pos;
+    
     // Entity transition data
     struct {
         unsigned next_entity_id;  // Entity ID to transition to when cleared
@@ -53,5 +60,6 @@ unsigned config_count_solutions(const char *solution_file);
 void config_free(GameConfig *config);
 void config_free_solution(SolutionData *solution);
 Entity* config_get_entity(const GameConfig *config, unsigned entity_id);
+bool entity_has_tag(const Entity *entity, const char *tag);
 
 #endif

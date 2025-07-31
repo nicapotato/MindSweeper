@@ -9,7 +9,7 @@ static bool g_config_loaded = false;
 
 bool board_calloc_arrays(struct Board *b);
 void board_free_arrays(struct Board *b);
-unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsigned row, unsigned col);
+unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsigned row, unsigned col, SpriteType sprite_type);
 void board_draw_threat_level_text(const struct Board *b, const char *text, int x, int y, SDL_Color color);
 static bool board_apply_solution_data(struct Board *b, const SolutionData *solution);
 
@@ -338,7 +338,7 @@ void board_set_tile_state(struct Board *b, unsigned row, unsigned col, TileState
     // Update display sprite immediately if not animating
     if (b->animations[index].type == ANIM_NONE) {
         unsigned entity_id = b->entity_ids[index];
-        b->display_sprites[index] = get_entity_sprite_index(entity_id, state, row, col);
+        b->display_sprites[index] = get_entity_sprite_index(entity_id, state, row, col, SPRITE_TYPE_NORMAL);
     }
     
     // Recalculate threat levels when tile is revealed
@@ -389,7 +389,7 @@ void board_update_animations(struct Board *b) {
 
 
 
-unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsigned row, unsigned col) {
+unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsigned row, unsigned col, SpriteType sprite_type) {
     if (tile_state == TILE_HIDDEN) {
         return SPRITE_HIDDEN;
     }
@@ -422,6 +422,14 @@ unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsig
             
             printf("    Crystal at [%u,%u] assigned color %u (sprite index %u)\n", 
                    row, col, color_index, sprite_index);
+            return sprite_index;
+        }
+        
+        // Check if we should use the hostile sprite
+        if (sprite_type == SPRITE_TYPE_HOSTILE && entity->hostile_sprite_pos.has_hostile_sprite) {
+            unsigned sprite_index = entity->hostile_sprite_pos.y * 4 + entity->hostile_sprite_pos.x;
+            printf("    Using hostile sprite for entity %u: y=%u * 4 + x=%u = %u\n", 
+                   entity_id, entity->hostile_sprite_pos.y, entity->hostile_sprite_pos.x, sprite_index);
             return sprite_index;
         }
         
@@ -760,7 +768,7 @@ void board_reveal_all_tiles(struct Board *b) {
                 // Update display sprite immediately
                 size_t index = (size_t)(r * b->columns + c);
                 unsigned entity_id = b->entity_ids[index];
-                b->display_sprites[index] = get_entity_sprite_index(entity_id, TILE_REVEALED, r, c);
+                b->display_sprites[index] = get_entity_sprite_index(entity_id, TILE_REVEALED, r, c, SPRITE_TYPE_NORMAL);
                 
                 // Clear any ongoing animation
                 b->animations[index].type = ANIM_NONE;

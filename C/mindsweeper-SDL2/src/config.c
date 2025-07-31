@@ -151,6 +151,18 @@ bool config_load(GameConfig *config, const char *config_file) {
                         e->sprite_pos.x = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(revealed, "x"));
                         e->sprite_pos.y = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(revealed, "y"));
                     }
+                    
+                    // Check for revealed-hostile sprite (for mimics and similar entities)
+                    cJSON *revealed_hostile = cJSON_GetObjectItem(sprites, "revealed-hostile");
+                    if (revealed_hostile) {
+                        e->hostile_sprite_pos.x = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(revealed_hostile, "x"));
+                        e->hostile_sprite_pos.y = (unsigned)cJSON_GetNumberValue(cJSON_GetObjectItem(revealed_hostile, "y"));
+                        e->hostile_sprite_pos.has_hostile_sprite = true;
+                        printf("Entity %u (%s) has revealed-hostile sprite at (%u,%u)\n", 
+                               e->id, e->name, e->hostile_sprite_pos.x, e->hostile_sprite_pos.y);
+                    } else {
+                        e->hostile_sprite_pos.has_hostile_sprite = false;
+                    }
                 }
             }
             
@@ -353,6 +365,20 @@ Entity* config_get_entity(const GameConfig *config, unsigned entity_id) {
         }
     }
     return NULL;
+}
+
+// Helper function to check if an entity has a specific tag
+bool entity_has_tag(const Entity *entity, const char *tag) {
+    if (!entity || !tag) {
+        return false;
+    }
+    
+    for (unsigned i = 0; i < entity->tag_count; i++) {
+        if (strcmp(entity->tags[i], tag) == 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // Parse solution count from filename like "solutions_1_n_20.json" -> 20

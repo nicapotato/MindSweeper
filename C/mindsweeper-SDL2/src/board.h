@@ -6,6 +6,12 @@
 // Forward declaration to avoid circular dependency
 struct Game;
 
+// Sprite type enumeration for entity sprites
+typedef enum {
+    SPRITE_TYPE_NORMAL,      // Standard revealed sprite
+    SPRITE_TYPE_HOSTILE      // Revealed-hostile sprite (for mimics)
+} SpriteType;
+
 // Animation types for tile transitions
 typedef enum {
     ANIM_NONE = 0,
@@ -119,7 +125,7 @@ void board_set_tile_state(struct Board *b, unsigned row, unsigned col, TileState
 // Animation system
 void board_update_animations(struct Board *b);
 bool board_is_tile_animating(const struct Board *b, unsigned row, unsigned col);
-unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsigned row, unsigned col);
+unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsigned row, unsigned col, SpriteType sprite_type);
 unsigned get_tile_sprite_index(const struct Board *b, unsigned row, unsigned col);
 
 // Game logic

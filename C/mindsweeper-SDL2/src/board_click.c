@@ -9,7 +9,7 @@
 void board_finish_animation(struct Board *b, unsigned row, unsigned col);
 
 void board_start_animation(struct Board *b, unsigned row, unsigned col, 
-                          AnimationType type, Uint32 duration_ms, bool blocks_input) {
+                          AnimationType type, Uint32 duration_ms, bool blocks_input, TileState original_state) {
     if (row >= b->rows || col >= b->columns) {
         return;
     }
@@ -24,20 +24,41 @@ void board_start_animation(struct Board *b, unsigned row, unsigned col,
     
     // Set animation sprites based on type
     unsigned entity_id = b->entity_ids[index];
-    TileState tile_state = b->tile_states[index];
+    TileState current_tile_state = b->tile_states[index];
     
     switch (type) {
         case ANIM_REVEALING:
             anim->start_sprite = SPRITE_HIDDEN;
-            anim->end_sprite = get_entity_sprite_index(entity_id, TILE_REVEALED, row, col);
+            anim->end_sprite = get_entity_sprite_index(entity_id, TILE_REVEALED, row, col, SPRITE_TYPE_NORMAL);
             printf("  Animation: SPRITE_HIDDEN (%u) -> Entity sprite (%u)\n", 
                    anim->start_sprite, anim->end_sprite);
             break;
-        case ANIM_COMBAT:
-            // Stage 1: Show entity sprite for 0.5s
-            anim->start_sprite = get_entity_sprite_index(entity_id, tile_state, row, col);
-            anim->end_sprite = get_entity_sprite_index(entity_id, tile_state, row, col);
+        case ANIM_COMBAT: {
+            // Handle different combat scenarios based on ORIGINAL tile state and entity type
+            const GameConfig *config = board_get_config();
+            Entity *entity = config_get_entity(config, entity_id);
+            
+            if (original_state == TILE_HIDDEN) {
+                // Hidden enemy click: Keep current behavior but check for mimic
+                if (entity && entity->id == 17 && entity_has_tag(entity, "hidden-click-reveal")) {
+                    // Special case for mimic: show revealed-hostile sprite
+                    anim->start_sprite = get_entity_sprite_index(entity_id, TILE_REVEALED, row, col, SPRITE_TYPE_HOSTILE);
+                    anim->end_sprite = get_entity_sprite_index(entity_id, TILE_REVEALED, row, col, SPRITE_TYPE_HOSTILE);
+                    printf("  Mimic combat animation: showing hostile sprite (%u)\n", anim->start_sprite);
+                } else {
+                    // Normal hidden enemy: show entity sprite first
+                    anim->start_sprite = get_entity_sprite_index(entity_id, TILE_REVEALED, row, col, SPRITE_TYPE_NORMAL);
+                    anim->end_sprite = get_entity_sprite_index(entity_id, TILE_REVEALED, row, col, SPRITE_TYPE_NORMAL);
+                    printf("  Hidden enemy combat: showing entity sprite (%u)\n", anim->start_sprite);
+                }
+            } else {
+                // Revealed enemy click: Skip showing entity sprite, go straight to combat effect
+                anim->start_sprite = 2; // Combat effect sprite (x:2, y:0)
+                anim->end_sprite = 2;
+                printf("  Revealed enemy combat: skipping entity sprite, going straight to combat effect (%u)\n", anim->start_sprite);
+            }
             break;
+        }
         case ANIM_COMBAT_STAGE2:
             // Stage 2: Show sprite x:2, y:0 (combat effect sprite)
             // Assuming 4 sprites per row: x:2, y:0 = index 2
@@ -46,14 +67,14 @@ void board_start_animation(struct Board *b, unsigned row, unsigned col,
             break;
         case ANIM_DYING:
         case ANIM_TREASURE_CLAIM:
-            anim->start_sprite = get_entity_sprite_index(entity_id, tile_state, row, col);
-            anim->end_sprite = get_entity_sprite_index(entity_id, tile_state, row, col);
+            anim->start_sprite = get_entity_sprite_index(entity_id, current_tile_state, row, col, SPRITE_TYPE_NORMAL);
+            anim->end_sprite = get_entity_sprite_index(entity_id, current_tile_state, row, col, SPRITE_TYPE_NORMAL);
             break;
         case ANIM_ENTITY_TRANSITION: {
             // Show the new entity that we're transitioning to
             unsigned new_entity_id = b->entity_ids[index];
-            anim->start_sprite = get_entity_sprite_index(new_entity_id, tile_state, row, col);
-            anim->end_sprite = get_entity_sprite_index(new_entity_id, tile_state, row, col);
+            anim->start_sprite = get_entity_sprite_index(new_entity_id, current_tile_state, row, col, SPRITE_TYPE_NORMAL);
+            anim->end_sprite = get_entity_sprite_index(new_entity_id, current_tile_state, row, col, SPRITE_TYPE_NORMAL);
             break;
         }
         default:
@@ -71,10 +92,36 @@ void board_finish_animation(struct Board *b, unsigned row, unsigned col) {
     
     // Handle multi-stage animations
     if (anim->type == ANIM_COMBAT) {
-        // Combat stage 1 finished, start stage 2
-        printf("Combat stage 1 finished, starting stage 2 at [%u,%u]\n", row, col);
-        board_start_animation(b, row, col, ANIM_COMBAT_STAGE2, 500, false);
-        return;
+        // Check if we started with the combat effect (revealed enemy case)
+        if (anim->start_sprite == 2) {
+            // Revealed enemy: we already showed combat effect, go directly to entity transition
+            printf("Revealed enemy combat finished, transitioning entity at [%u,%u]\n", row, col);
+            
+            // Get current entity to determine transition
+            unsigned current_entity_id = b->entity_ids[index];
+            const GameConfig *config = board_get_config();
+            Entity *entity = config_get_entity(config, current_entity_id);
+            
+            if (entity) {
+                // Use random choice for entity transition (handles both simple and random transitions)
+                unsigned new_entity_id = choose_random_entity_transition(entity);
+                printf("Combat transition: %u -> %u\n", current_entity_id, new_entity_id);
+                
+                // Transition to the selected entity
+                board_set_entity_id(b, row, col, new_entity_id);
+                board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false, TILE_REVEALED);
+            } else {
+                // Fallback: transition to empty tile
+                board_set_entity_id(b, row, col, 0);
+                board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false, TILE_REVEALED);
+            }
+            return;
+        } else {
+            // Hidden enemy: Combat stage 1 finished, start stage 2
+            printf("Combat stage 1 finished, starting stage 2 at [%u,%u]\n", row, col);
+            board_start_animation(b, row, col, ANIM_COMBAT_STAGE2, 500, false, TILE_REVEALED);
+            return;
+        }
     } else if (anim->type == ANIM_COMBAT_STAGE2) {
         // Combat stage 2 finished, transition to next entity
         printf("Combat stage 2 finished, transitioning entity at [%u,%u]\n", row, col);
@@ -91,11 +138,11 @@ void board_finish_animation(struct Board *b, unsigned row, unsigned col) {
             
             // Transition to the selected entity
             board_set_entity_id(b, row, col, new_entity_id);
-            board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false);
+            board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false, TILE_REVEALED);
         } else {
             // Fallback: transition to empty tile
             board_set_entity_id(b, row, col, 0);
-            board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false);
+            board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false, TILE_REVEALED);
         }
         return;
     } else if (anim->type == ANIM_TREASURE_CLAIM) {
@@ -114,11 +161,11 @@ void board_finish_animation(struct Board *b, unsigned row, unsigned col) {
             
             // Transition to the selected entity
             board_set_entity_id(b, row, col, new_entity_id);
-            board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false);
+            board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false, TILE_REVEALED);
         } else {
             // Fallback: transition to empty tile
             board_set_entity_id(b, row, col, 0);
-            board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false);
+            board_start_animation(b, row, col, ANIM_ENTITY_TRANSITION, 500, false, TILE_REVEALED);
         }
         return;
     }
@@ -185,7 +232,7 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
         if (current_state == TILE_HIDDEN) {
             board_set_tile_state(g->board, row, col, TILE_REVEALED);
         }
-        board_start_animation(g->board, row, col, ANIM_COMBAT, ANIM_COMBAT_DURATION_MS, false);
+        board_start_animation(g->board, row, col, ANIM_COMBAT, ANIM_COMBAT_DURATION_MS, false, current_state);
         return true;
     } else if (current_state == TILE_HIDDEN) {
         if (entity) {
@@ -193,7 +240,7 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
             printf("  Sprite position: x=%u, y=%u\n", entity->sprite_pos.x, entity->sprite_pos.y);
         }
         board_set_tile_state(g->board, row, col, TILE_REVEALED);
-        board_start_animation(g->board, row, col, ANIM_REVEALING, ANIM_REVEALING_DURATION_MS, false); // 0.8s reveal
+        board_start_animation(g->board, row, col, ANIM_REVEALING, ANIM_REVEALING_DURATION_MS, false, current_state); // 0.8s reveal
         
         return true;
     } else {
@@ -219,7 +266,7 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
                                 if (tile_state == TILE_HIDDEN && tile_entity_id == 1) {
                                     board_set_tile_state(g->board, r, c, TILE_REVEALED);
                                     size_t index = (size_t)(r * g->board->columns + c);
-                                    g->board->display_sprites[index] = get_entity_sprite_index(tile_entity_id, TILE_REVEALED, r, c);
+                                    g->board->display_sprites[index] = get_entity_sprite_index(tile_entity_id, TILE_REVEALED, r, c, SPRITE_TYPE_NORMAL);
                                     g->board->animations[index].type = ANIM_NONE;
                                     revealed_count++;
                                 }
@@ -243,7 +290,7 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
                                     // Update display sprite immediately
                                     size_t index = (size_t)(r * g->board->columns + c);
                                     TileState tile_state = board_get_tile_state(g->board, r, c);
-                                    g->board->display_sprites[index] = get_entity_sprite_index(25, tile_state, r, c);
+                                    g->board->display_sprites[index] = get_entity_sprite_index(25, tile_state, r, c, SPRITE_TYPE_NORMAL);
                                     
                                     weakened_count++;
                                     printf("Transformed mine at [%u,%u] from Entity 7 to Entity 25\n", r, c);
@@ -294,7 +341,7 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
                             // Update display sprite immediately
                             size_t index = (size_t)(target_row * g->board->columns + target_col);
                             unsigned tile_entity_id = board_get_entity_id(g->board, target_row, target_col);
-                            g->board->display_sprites[index] = get_entity_sprite_index(tile_entity_id, TILE_REVEALED, target_row, target_col);
+                            g->board->display_sprites[index] = get_entity_sprite_index(tile_entity_id, TILE_REVEALED, target_row, target_col, SPRITE_TYPE_NORMAL);
                             g->board->animations[index].type = ANIM_NONE;
                             
                             printf("🔮 Random single tile reveal complete! Revealed tile at [%u,%u] 🔮\n", target_row, target_col);
@@ -338,7 +385,7 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
                                             // Update display sprite immediately
                                             size_t index = (size_t)(target_row * g->board->columns + target_col);
                                             unsigned tile_entity_id = board_get_entity_id(g->board, target_row, target_col);
-                                            g->board->display_sprites[index] = get_entity_sprite_index(tile_entity_id, TILE_REVEALED, target_row, target_col);
+                                            g->board->display_sprites[index] = get_entity_sprite_index(tile_entity_id, TILE_REVEALED, target_row, target_col, SPRITE_TYPE_NORMAL);
                                             g->board->animations[index].type = ANIM_NONE;
                                             
                                             revealed_count++;
@@ -354,7 +401,7 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
                         break;
                     }
                 }
-                board_start_animation(g->board, row, col, ANIM_TREASURE_CLAIM, ANIM_TREASURE_DURATION_MS, false);
+                board_start_animation(g->board, row, col, ANIM_TREASURE_CLAIM, ANIM_TREASURE_DURATION_MS, false, current_state);
             }
         }
         
