@@ -52,6 +52,7 @@ bool game_new(struct Game **game) {
     struct Game *g = *game;
 
     g->is_running = true;
+    g->is_fullscreen = false;         // Initialize fullscreen state
     g->game_over_info.is_game_over = false;  // Initialize game over info
     g->game_over_info.death_cause[0] = '\0'; // Empty death cause string
     g->rows = DEFAULT_BOARD_ROWS;      // Use constant instead of magic number
@@ -237,7 +238,7 @@ void game_set_scale(struct Game *g) {
     // Update info font size
     if (g->info_font) {
         TTF_CloseFont(g->info_font);
-        g->info_font = TTF_OpenFont("assets/images/m6x11.ttf", 14 * g->scale);
+        g->info_font = TTF_OpenFont("assets/images/m6x11.ttf", 12); // Increased from 12 to 18 (50% bigger)
     }
 }
 
@@ -430,6 +431,10 @@ bool game_events(struct Game *g) {
                 // Increase music volume
                 audio_set_music_volume(&g->audio, g->audio.music_volume + 10);
                 break;
+            case SDL_SCANCODE_F:
+                // Toggle fullscreen mode
+                game_toggle_fullscreen(g);
+                break;
             default:
                 break;
             }
@@ -461,28 +466,6 @@ void game_draw(const struct Game *g) {
         case SCREEN_GAME:
             board_draw(g->board);
             player_panel_draw(g->player_panel, &g->player, g);
-            
-            // Draw keyboard shortcuts hint
-            if (g->info_font) {
-                SDL_Color grey = {150, 150, 150, 255};
-                const char *hint = "Press H for Help, E for Entities, M for Music, S for Sound";
-                
-                SDL_Surface *hint_surface = TTF_RenderText_Solid(g->info_font, hint, grey);
-                if (hint_surface) {
-                    SDL_Texture *hint_texture = SDL_CreateTextureFromSurface(g->renderer, hint_surface);
-                    if (hint_texture) {
-                        SDL_Rect hint_rect = {
-                            (WINDOW_WIDTH * g->scale) - hint_surface->w - (5 * g->scale),
-                            (WINDOW_HEIGHT * g->scale) - hint_surface->h - (5 * g->scale),
-                            hint_surface->w,
-                            hint_surface->h
-                        };
-                        SDL_RenderCopy(g->renderer, hint_texture, NULL, &hint_rect);
-                        SDL_DestroyTexture(hint_texture);
-                    }
-                    SDL_FreeSurface(hint_surface);
-                }
-            }
             
             // Draw game over popup if needed
             game_draw_game_over_popup(g);
@@ -530,28 +513,43 @@ bool game_run(struct Game *g) {
 // ========== DYNAMIC SCALING FUNCTIONS ==========
 
 int calculate_optimal_scale(int window_width, int window_height, int board_rows, int board_cols) {
-    // Reserve space for UI elements
-    int ui_margin = 50;  // General margins
-    int player_panel_height = PLAYER_PANEL_HEIGHT + 20; // Player panel + spacing
-    int border_space = 20; // Additional border space
+    // Calculate the space needed for UI elements with minimal margins
+    int player_panel_height_base = (PLAYER_PANEL_HEIGHT / 2); // Base player panel height (unscaled)
+    int border_space = BORDER_LEFT + BORDER_RIGHT + BORDER_BOTTOM; // Actual border space needed
+    int ui_margin_total = 20;  // Total margins (top + bottom, left + right)
     
-    // Calculate available space for the game board
-    int available_width = window_width - (ui_margin * 2) - border_space;
-    int available_height = window_height - player_panel_height - (ui_margin * 2) - border_space;
-    
-    // Calculate scale that fits both width and height
+    // Calculate what scale would fit the width
+    int available_width = window_width - border_space - ui_margin_total;
     int max_scale_width = available_width / (board_cols * PIECE_SIZE);
-    int max_scale_height = available_height / (board_rows * PIECE_SIZE);
+    
+    // Calculate what scale would fit the height (board + player panel + margins)
+    int available_height = window_height - GAME_BOARD_Y - ui_margin_total;
+    
+    // We need to solve: (board_rows * PIECE_SIZE * scale) + (player_panel_height_base * scale) + 10 <= available_height
+    // Simplifying: scale * (board_rows * PIECE_SIZE + player_panel_height_base) + 10 <= available_height
+    // Therefore: scale <= (available_height - 10) / (board_rows * PIECE_SIZE + player_panel_height_base)
+    int total_content_height_per_scale = (board_rows * PIECE_SIZE) + player_panel_height_base;
+    int max_scale_height = (available_height - 10) / total_content_height_per_scale;
     
     // Use the smaller scale to ensure everything fits
     int optimal_scale = (max_scale_width < max_scale_height) ? max_scale_width : max_scale_height;
     
     // Ensure minimum scale of 1 and reasonable maximum
     if (optimal_scale < 1) optimal_scale = 1;
-    if (optimal_scale > 8) optimal_scale = 8;  // Cap at 8x for performance
+    if (optimal_scale > 8) optimal_scale = 8;  // Cap for performance
     
-    printf("Window: %dx%d, Available: %dx%d, Calculated scale: %d\n", 
-           window_width, window_height, available_width, available_height, optimal_scale);
+    // Debug output to verify calculations
+    int final_board_height = board_rows * PIECE_SIZE * optimal_scale;
+    int final_panel_height = player_panel_height_base * optimal_scale;
+    int final_total_height = final_board_height + final_panel_height + GAME_BOARD_Y + ui_margin_total + 10;
+    int final_board_width = board_cols * PIECE_SIZE * optimal_scale;
+    int final_total_width = final_board_width + border_space + ui_margin_total;
+    
+    printf("Window: %dx%d, Board: %dx%d, Calculated scale: %d\n", 
+           window_width, window_height, board_cols, board_rows, optimal_scale);
+    printf("Final dimensions: %dx%d (fits in %dx%d: %s)\n", 
+           final_total_width, final_total_height, window_width, window_height,
+           (final_total_width <= window_width && final_total_height <= window_height) ? "YES" : "NO");
     
     return optimal_scale;
 }
@@ -877,13 +875,13 @@ void player_panel_set_scale(PlayerPanel *p, int scale) {
     int max_panel_columns = 20; // Reduced maximum width to reduce white space
     int effective_columns = (p->columns > (unsigned)max_panel_columns) ? max_panel_columns : (int)p->columns;
     p->rect.w = (PIECE_SIZE * effective_columns) * p->scale;
-    p->rect.h = PLAYER_PANEL_HEIGHT * p->scale;
+    p->rect.h = (PLAYER_PANEL_HEIGHT / 2) * p->scale; // Make it more compact - half the original height
     
-    // Set up level-up button position (left side)
+    // Set up level-up button position (left side) - smaller button for compact layout
     p->level_up_button.x = p->rect.x + 4 * p->scale;
     p->level_up_button.y = p->rect.y + 4 * p->scale;
-    p->level_up_button.w = (PIECE_SIZE * 1.5) * p->scale;
-    p->level_up_button.h = (PIECE_SIZE * 1.5) * p->scale;
+    p->level_up_button.w = (PIECE_SIZE * 1.2) * p->scale; // Slightly smaller button
+    p->level_up_button.h = (PIECE_SIZE * 1.2) * p->scale; // Slightly smaller button
 }
 
 void player_panel_set_size(PlayerPanel *p, unsigned columns) {
@@ -943,36 +941,25 @@ void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats, const str
         }
     }
     
-    // Level display area (to the left of health/experience bars)
-    int bars_start_x = p->level_up_button.x + p->level_up_button.w + 8 * p->scale;
-    SDL_Rect level_display = {
-        bars_start_x,
-        p->level_up_button.y + 6 * p->scale, // Center vertically
-        40 * p->scale,
-        16 * p->scale
-    };
-    
-    // Level background (light grey with border)
-    SDL_SetRenderDrawColor(p->renderer, 240, 240, 240, 255); // Very light grey
-    SDL_RenderFillRect(p->renderer, &level_display);
-    SDL_SetRenderDrawColor(p->renderer, 0, 0, 0, 255);
-    SDL_RenderDrawRect(p->renderer, &level_display);
-    
-    // Draw level number using TTF font
+    // Draw level number below the sprite but within the panel
     char level_text[16];
-    snprintf(level_text, sizeof(level_text), "%u", stats->level);
+    snprintf(level_text, sizeof(level_text), "L%u", stats->level);
     SDL_Color black = {0, 0, 0, 255};
     player_panel_draw_text(p, level_text, 
-                          level_display.x + 4 * p->scale, 
-                          level_display.y + 4 * p->scale, 
+                          p->level_up_button.x + 4 * p->scale, 
+                          p->level_up_button.y + p->level_up_button.h - 2 * p->scale, // Position it higher within panel
                           black);
     
-    // Draw cave solution index underneath the level
+    // Compact single-row layout starting after the sprite button
+    int row_start_x = p->level_up_button.x + p->level_up_button.w + 8 * p->scale;
+    int row_y = p->level_up_button.y + 6 * p->scale; // Center vertically with sprite
+    
+    // Map info (compact)
     SDL_Rect map_display = {
-        bars_start_x,
-        level_display.y + level_display.h + 2 * p->scale, // Below level display, reduced spacing
-        60 * p->scale,  // Slightly narrower to fit better
-        14 * p->scale   // Slightly smaller height
+        row_start_x,
+        row_y,
+        50 * p->scale,
+        16 * p->scale
     };
     
     // Map background (light blue with border)
@@ -982,21 +969,21 @@ void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats, const str
     SDL_RenderDrawRect(p->renderer, &map_display);
     
     // Draw map text "Map: X"
-    char map_text[32];
-    snprintf(map_text, sizeof(map_text), "Map: %u", g->admin.current_solution_index);
+    char map_text[16];
+    snprintf(map_text, sizeof(map_text), "M%u", g->admin.current_solution_index);
     SDL_Color dark_blue = {0, 0, 128, 255};
     player_panel_draw_text(p, map_text, 
                           map_display.x + 4 * p->scale, 
                           map_display.y + 4 * p->scale, 
                           dark_blue);
     
-    // Health bar with background and progress
-    int health_start_x = bars_start_x + map_display.w + 8 * p->scale;
+    // Health bar (compact, same row)
+    int health_start_x = row_start_x + map_display.w + 6 * p->scale;
     SDL_Rect health_bg = {
         health_start_x,
-        p->level_up_button.y,
-        80 * p->scale,  // Reduced width to fit better
-        12 * p->scale
+        row_y,
+        60 * p->scale,  // Compact width
+        16 * p->scale   // Same height as map
     };
     
     // Health background (dark red)
@@ -1004,12 +991,12 @@ void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats, const str
     SDL_RenderFillRect(p->renderer, &health_bg);
     
     // Health progress (bright red)
-    int health_width = (int)((float)stats->health / stats->max_health * 80.0f * p->scale);
+    int health_width = (int)((float)stats->health / stats->max_health * 60.0f * p->scale);
     SDL_Rect health_progress = {
         health_start_x,
-        p->level_up_button.y,
+        row_y,
         health_width,
-        12 * p->scale
+        16 * p->scale
     };
     SDL_SetRenderDrawColor(p->renderer, 255, 0, 0, 255);
     SDL_RenderFillRect(p->renderer, &health_progress);
@@ -1019,20 +1006,21 @@ void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats, const str
     SDL_RenderDrawRect(p->renderer, &health_bg);
     
     // Draw health text (current/max)
-    char health_text[32];
+    char health_text[16];
     snprintf(health_text, sizeof(health_text), "%u/%u", stats->health, stats->max_health);
     SDL_Color white = {255, 255, 255, 255};
     player_panel_draw_text(p, health_text, 
                           health_bg.x + 2 * p->scale, 
-                          health_bg.y + 2 * p->scale, 
+                          health_bg.y + 4 * p->scale, 
                           white);
     
-    // Experience bar with background and progress  
+    // Experience bar (compact, same row)
+    int exp_start_x = health_start_x + health_bg.w + 6 * p->scale;
     SDL_Rect exp_bg = {
-        health_start_x,
-        p->level_up_button.y + 16 * p->scale,
-        80 * p->scale,  // Reduced width to match health bar
-        12 * p->scale
+        exp_start_x,
+        row_y,
+        60 * p->scale,  // Compact width
+        16 * p->scale   // Same height as others
     };
     
     // Experience background (dark blue)
@@ -1045,12 +1033,12 @@ void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats, const str
     if (exp_percentage > 1.0f) {
         exp_percentage = 1.0f;  // Cap visual bar at 100%
     }
-    int exp_width = (int)(exp_percentage * 80.0f * p->scale);
+    int exp_width = (int)(exp_percentage * 60.0f * p->scale);
     SDL_Rect exp_progress = {
-        health_start_x,
-        p->level_up_button.y + 16 * p->scale,
+        exp_start_x,
+        row_y,
         exp_width,
-        12 * p->scale
+        16 * p->scale
     };
     SDL_SetRenderDrawColor(p->renderer, 0, 100, 255, 255);
     SDL_RenderFillRect(p->renderer, &exp_progress);
@@ -1060,15 +1048,12 @@ void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats, const str
     SDL_RenderDrawRect(p->renderer, &exp_bg);
     
     // Draw experience text (current/max)
-    char exp_text[32];
+    char exp_text[16];
     snprintf(exp_text, sizeof(exp_text), "%u/%u", stats->experience, stats->exp_to_next_level);
     player_panel_draw_text(p, exp_text, 
                           exp_bg.x + 2 * p->scale, 
-                          exp_bg.y + 2 * p->scale, 
+                          exp_bg.y + 4 * p->scale, 
                           white);
-    
-    // TODO: Add text rendering for numeric values inside bars
-    // For now, we'll use simple visual indicators
     
     // Reset render color to default
     SDL_SetRenderDrawColor(p->renderer, 0, 0, 0, 255);
@@ -1117,13 +1102,56 @@ bool player_panel_handle_click(PlayerPanel *p, int x, int y, struct Game *g) {
     return false;
 }
 
+// ========== FULLSCREEN FUNCTIONS ==========
+
+void game_toggle_fullscreen(struct Game *g) {
+    g->is_fullscreen = !g->is_fullscreen;
+    
+    if (g->is_fullscreen) {
+        // Enter fullscreen mode
+        if (SDL_SetWindowFullscreen(g->window, SDL_WINDOW_FULLSCREEN_DESKTOP) != 0) {
+            fprintf(stderr, "Failed to enter fullscreen: %s\n", SDL_GetError());
+            g->is_fullscreen = false; // Revert state on failure
+            return;
+        }
+        printf("Entered fullscreen mode\n");
+        
+        // Get the actual fullscreen dimensions
+        int display_w, display_h;
+        SDL_GetWindowSize(g->window, &display_w, &display_h);
+        
+        // Recalculate optimal scale for fullscreen
+        g->scale = calculate_optimal_scale(display_w, display_h, (int)g->rows, (int)g->columns);
+        printf("Fullscreen dimensions: %dx%d, New scale: %d\n", display_w, display_h, g->scale);
+        
+    } else {
+        // Exit fullscreen mode
+        if (SDL_SetWindowFullscreen(g->window, 0) != 0) {
+            fprintf(stderr, "Failed to exit fullscreen: %s\n", SDL_GetError());
+            g->is_fullscreen = true; // Revert state on failure
+            return;
+        }
+        printf("Exited fullscreen mode\n");
+        
+        // Restore window size
+        SDL_SetWindowSize(g->window, WINDOW_WIDTH, WINDOW_HEIGHT);
+        
+        // Recalculate optimal scale for windowed mode
+        g->scale = calculate_optimal_scale(WINDOW_WIDTH, WINDOW_HEIGHT, (int)g->rows, (int)g->columns);
+        printf("Windowed dimensions: %dx%d, New scale: %d\n", WINDOW_WIDTH, WINDOW_HEIGHT, g->scale);
+    }
+    
+    // Update all game components with new scale
+    game_set_scale(g);
+}
+
 // ========== SCREEN SYSTEM FUNCTIONS ==========
 
 void game_init_screen_system(struct Game *g) {
     g->current_screen = SCREEN_GAME;
     
-    // Load font for information screens
-            g->info_font = TTF_OpenFont("assets/images/m6x11.ttf", 14 * g->scale);
+    // Load font for information screens - use larger fixed size for better readability
+    g->info_font = TTF_OpenFont("assets/images/m6x11.ttf", 18); // Increased from 12 to 18 (50% bigger)
     if (!g->info_font) {
         fprintf(stderr, "Failed to load info font: %s\n", TTF_GetError());
         // Continue without font - fallback will be handled in drawing
@@ -1307,9 +1335,9 @@ void game_draw_entities_screen(const struct Game *g) {
     SDL_Color green = {100, 255, 100, 255};
     SDL_Color cyan = {100, 255, 255, 255};
     
-    int start_x = 20 * g->scale;
-    int start_y = 50 * g->scale;
-    int line_height = 18 * g->scale;
+    int start_x = 20;
+    int start_y = 50;
+    int line_height = 14; // Fixed line height, not scaled for compactness
     int current_y = start_y;
     
     // Title
@@ -1317,7 +1345,7 @@ void game_draw_entities_screen(const struct Game *g) {
     if (title_surface) {
         SDL_Texture *title_texture = SDL_CreateTextureFromSurface(g->renderer, title_surface);
         if (title_texture) {
-            SDL_Rect title_rect = {start_x, 20 * g->scale, title_surface->w, title_surface->h};
+            SDL_Rect title_rect = {start_x, 20, title_surface->w, title_surface->h}; // Fixed position
             SDL_RenderCopy(g->renderer, title_texture, NULL, &title_rect);
             SDL_DestroyTexture(title_texture);
         }
@@ -1399,7 +1427,7 @@ void game_draw_entities_screen(const struct Game *g) {
                 current_y += line_height;
                 
                 // Check if we're running out of space
-                if (current_y > (WINDOW_HEIGHT - 100) * g->scale) {
+                if (current_y > WINDOW_HEIGHT - 100) {
                     break;
                 }
             }
@@ -1423,9 +1451,9 @@ void game_draw_howto_screen(const struct Game *g) {
     SDL_Color yellow = {255, 255, 0, 255};
     SDL_Color cyan = {100, 255, 255, 255};
     
-    int start_x = 10 * g->scale;
-    int start_y = 50 * g->scale;
-    int line_height = 16 * g->scale;
+    int start_x = 10;
+    int start_y = 50;
+    int line_height = 14; // Fixed line height, not scaled for compactness
     int current_y = start_y;
     
     // Title
@@ -1433,7 +1461,7 @@ void game_draw_howto_screen(const struct Game *g) {
     if (title_surface) {
         SDL_Texture *title_texture = SDL_CreateTextureFromSurface(g->renderer, title_surface);
         if (title_texture) {
-            SDL_Rect title_rect = {start_x, 20 * g->scale, title_surface->w, title_surface->h};
+            SDL_Rect title_rect = {start_x, 20, title_surface->w, title_surface->h}; // Fixed position
             SDL_RenderCopy(g->renderer, title_texture, NULL, &title_rect);
             SDL_DestroyTexture(title_texture);
         }
@@ -1451,6 +1479,7 @@ void game_draw_howto_screen(const struct Game *g) {
         "KEYBOARD SHORTCUTS:",
         "• H - Toggle this How to Play screen",
         "• E - Toggle Entities information screen", 
+        "• F - Toggle Fullscreen mode",
         "• ESC - Return to main game",
         "• M - Toggle background music",
         "• S - Toggle sound effects",
@@ -1480,7 +1509,7 @@ void game_draw_howto_screen(const struct Game *g) {
     
     const int num_lines = sizeof(lines) / sizeof(lines[0]);
     
-    for (int i = 0; i < num_lines && current_y < (WINDOW_HEIGHT - 50) * g->scale; i++) {
+    for (int i = 0; i < num_lines && current_y < WINDOW_HEIGHT - 50; i++) {
         if (strlen(lines[i]) == 0) {
             current_y += line_height / 2; // Half-height for empty lines
             continue;

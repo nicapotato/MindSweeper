@@ -17,8 +17,8 @@
 #define IMG_FLAGS IMG_INIT_PNG
 
 #define WINDOW_TITLE "MindSweeper"
-#define WINDOW_WIDTH 1200  // Reduced from 1440 to 1200 for better fit
-#define WINDOW_HEIGHT 920  // Keep height the same for player panel visibility
+#define WINDOW_WIDTH 1100  // Optimized for better board scaling and space utilization
+#define WINDOW_HEIGHT 900  // Optimized height to reduce bottom whitespace
 
 #define PIECE_SIZE 16    // Back to original sprite size
 #define BORDER_HEIGHT 55
@@ -29,10 +29,10 @@
 // Player panel dimensions - moved below game board
 #define PLAYER_PANEL_HEIGHT 60
 #define PLAYER_PANEL_Y 15
-#define PLAYER_STATS_FONT_SIZE 10
+#define PLAYER_STATS_FONT_SIZE 5
 
-// Game board positioning - no top panel, start at top
-#define GAME_BOARD_Y 15  // Start near the top
+// Game board positioning - no top panel, start at top  
+#define GAME_BOARD_Y 10  // Reduced from 15 to 10 to use space more efficiently
 
 #define DIGIT_BACK_WIDTH 41
 #define DIGIT_BACK_HEIGHT 25

@@ -74,6 +74,7 @@ struct Game {
         TTF_Font *info_font;          // Font for information screens
         AudioSystem audio;             // Audio system
         bool is_running;
+        bool is_fullscreen;           // Fullscreen mode state
         GameOverInfo game_over_info;  // Replaced simple boolean with detailed info
         unsigned rows;
         unsigned columns;
@@ -100,11 +101,14 @@ void game_init_screen_system(struct Game *g);
 void game_set_screen(struct Game *g, UIScreenState screen);
 void game_setup_screen_buttons(struct Game *g);
 bool game_handle_screen_button_click(struct Game *g, int x, int y);
-
-// Screen drawing functions
+void game_draw_screen_buttons(const struct Game *g);
 void game_draw_entities_screen(const struct Game *g);
 void game_draw_howto_screen(const struct Game *g);
-void game_draw_screen_buttons(const struct Game *g);
+
+// Fullscreen management functions
+void game_toggle_fullscreen(struct Game *g);
+
+// Screen drawing functions
 void game_draw_text_wrapped(const struct Game *g, const char *text, int x, int y, int max_width, SDL_Color color);
 
 // Admin panel functions
