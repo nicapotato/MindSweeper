@@ -175,79 +175,143 @@ bool config_load(GameConfig *config, const char *config_file) {
 }
 
 bool config_load_solution(SolutionData *solution, const char *solution_file, unsigned solution_index) {
-    char *content = read_file_contents(solution_file);
-    if (!content) {
+    // Parameter validation
+    if (!solution || !solution_file) {
+        fprintf(stderr, "Invalid parameters to config_load_solution\n");
         return false;
     }
     
+    // Initialize solution structure
+    memset(solution, 0, sizeof(SolutionData));
+    
+    // Read file contents
+    char *content = read_file_contents(solution_file);
+    if (!content) {
+        fprintf(stderr, "Failed to read solution file: %s\n", solution_file);
+        return false;
+    }
+    
+    // Parse JSON
     cJSON *json = cJSON_Parse(content);
     free(content);
     
     if (!json) {
-        fprintf(stderr, "Failed to parse JSON solution\n");
+        fprintf(stderr, "Failed to parse JSON in solution file: %s\n", solution_file);
         return false;
     }
     
+    // Validate JSON structure
     if (!cJSON_IsArray(json)) {
-        fprintf(stderr, "Solution file is not an array\n");
+        fprintf(stderr, "Solution file is not an array: %s\n", solution_file);
         cJSON_Delete(json);
         return false;
     }
     
+    // Check solution index bounds
     int solution_count = cJSON_GetArraySize(json);
     if ((int)solution_index >= solution_count) {
-        fprintf(stderr, "Solution index %u out of range (0-%d)\n", solution_index, solution_count - 1);
+        fprintf(stderr, "Solution index %u out of range (0-%d) in %s\n", 
+                solution_index, solution_count - 1, solution_file);
         cJSON_Delete(json);
         return false;
     }
     
+    // Get solution object
     cJSON *sol = cJSON_GetArrayItem(json, (int)solution_index);
+    if (!sol || !cJSON_IsObject(sol)) {
+        fprintf(stderr, "Invalid solution object at index %u in %s\n", solution_index, solution_file);
+        cJSON_Delete(json);
+        return false;
+    }
     
     // Parse UUID
     cJSON *uuid = cJSON_GetObjectItem(sol, "uuid");
-    if (uuid) {
+    if (uuid && cJSON_IsString(uuid)) {
         strncpy(solution->uuid, cJSON_GetStringValue(uuid), sizeof(solution->uuid) - 1);
+        solution->uuid[sizeof(solution->uuid) - 1] = '\0'; // Ensure null termination
     }
     
-    // Parse board
+    // Parse board data
     cJSON *board = cJSON_GetObjectItem(sol, "board");
-    if (!board) {
-        fprintf(stderr, "No board data in solution\n");
+    if (!board || !cJSON_IsArray(board)) {
+        fprintf(stderr, "No valid board data in solution %u\n", solution_index);
         cJSON_Delete(json);
         return false;
     }
     
+    // Get board dimensions
     solution->rows = (unsigned)cJSON_GetArraySize(board);
     if (solution->rows == 0) {
-        fprintf(stderr, "Empty board in solution\n");
+        fprintf(stderr, "Empty board in solution %u\n", solution_index);
         cJSON_Delete(json);
         return false;
     }
     
     cJSON *first_row = cJSON_GetArrayItem(board, 0);
-    solution->cols = (unsigned)cJSON_GetArraySize(first_row);
+    if (!first_row || !cJSON_IsArray(first_row)) {
+        fprintf(stderr, "Invalid first row in solution %u\n", solution_index);
+        cJSON_Delete(json);
+        return false;
+    }
     
-    // Allocate 2D array
+    solution->cols = (unsigned)cJSON_GetArraySize(first_row);
+    if (solution->cols == 0) {
+        fprintf(stderr, "Empty columns in solution %u\n", solution_index);
+        cJSON_Delete(json);
+        return false;
+    }
+    
+    // Allocate 2D array with error handling
     solution->board = malloc(solution->rows * sizeof(unsigned*));
+    if (!solution->board) {
+        fprintf(stderr, "Failed to allocate board rows in solution %u\n", solution_index);
+        cJSON_Delete(json);
+        return false;
+    }
+    
+    // Initialize all row pointers to NULL for cleanup safety
+    for (unsigned i = 0; i < solution->rows; i++) {
+        solution->board[i] = NULL;
+    }
+    
+    // Allocate and populate each row
     for (unsigned i = 0; i < solution->rows; i++) {
         solution->board[i] = malloc(solution->cols * sizeof(unsigned));
+        if (!solution->board[i]) {
+            fprintf(stderr, "Failed to allocate board row %u in solution %u\n", i, solution_index);
+            config_free_solution(solution);
+            cJSON_Delete(json);
+            return false;
+        }
         
         cJSON *row = cJSON_GetArrayItem(board, (int)i);
+        if (!row || !cJSON_IsArray(row)) {
+            fprintf(stderr, "Invalid row %u in solution %u\n", i, solution_index);
+            config_free_solution(solution);
+            cJSON_Delete(json);
+            return false;
+        }
+        
+        // Validate row size
+        if (cJSON_GetArraySize(row) != (int)solution->cols) {
+            fprintf(stderr, "Row %u has wrong size in solution %u\n", i, solution_index);
+            config_free_solution(solution);
+            cJSON_Delete(json);
+            return false;
+        }
+        
+        // Populate row data
         for (unsigned j = 0; j < solution->cols; j++) {
             cJSON *cell = cJSON_GetArrayItem(row, (int)j);
+            if (!cell || !cJSON_IsNumber(cell)) {
+                fprintf(stderr, "Invalid cell [%u,%u] in solution %u\n", i, j, solution_index);
+                config_free_solution(solution);
+                cJSON_Delete(json);
+                return false;
+            }
             solution->board[i][j] = (unsigned)cJSON_GetNumberValue(cell);
         }
     }
-    
-    // Print the solution board
-    printf("Solution board (%ux%u):\n", solution->rows, solution->cols);
-    for (unsigned i = 0; i < solution->rows; i++) {
-        for (unsigned j = 0; j < solution->cols; j++) {
-            printf("%u ", solution->board[i][j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
     
     cJSON_Delete(json);
     return true;
@@ -262,15 +326,24 @@ void config_free(GameConfig *config) {
 }
 
 void config_free_solution(SolutionData *solution) {
+    if (!solution) {
+        return;
+    }
+    
     if (solution->board) {
         for (unsigned i = 0; i < solution->rows; i++) {
-            free(solution->board[i]);
+            if (solution->board[i]) {
+                free(solution->board[i]);
+            }
         }
         free(solution->board);
         solution->board = NULL;
     }
+    
+    // Reset all fields
     solution->rows = 0;
     solution->cols = 0;
+    memset(solution->uuid, 0, sizeof(solution->uuid));
 }
 
 Entity* config_get_entity(const GameConfig *config, unsigned entity_id) {

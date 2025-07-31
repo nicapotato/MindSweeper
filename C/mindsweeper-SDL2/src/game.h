@@ -111,7 +111,6 @@ void game_draw_text_wrapped(const struct Game *g, const char *text, int x, int y
 void game_toggle_admin_panel(struct Game *g);
 void game_admin_god_mode(struct Game *g);
 void game_admin_reveal_all(struct Game *g);
-bool game_admin_load_map(struct Game *g, unsigned solution_index);
 void game_print_admin_help(void);
 
 // Player panel functions

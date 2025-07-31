@@ -11,6 +11,7 @@ bool board_calloc_arrays(struct Board *b);
 void board_free_arrays(struct Board *b);
 unsigned get_entity_sprite_index(unsigned entity_id, TileState tile_state, unsigned row, unsigned col);
 void board_draw_threat_level_text(const struct Board *b, const char *text, int x, int y, SDL_Color color);
+static bool board_apply_solution_data(struct Board *b, const SolutionData *solution);
 
 bool board_new(struct Board **board, SDL_Renderer *renderer, unsigned rows,
                unsigned columns, int scale) {
@@ -204,45 +205,77 @@ bool board_reset(struct Board *b) {
     return true;
 }
 
+// Magic number for the starting entity that should be revealed
+#define STARTING_ENTITY_ID 11
+
 bool board_load_solution(struct Board *b, const char *solution_file, unsigned solution_index) {
-    SolutionData solution = {0};
-    
-    if (!config_load_solution(&solution, solution_file, solution_index)) {
-        fprintf(stderr, "Failed to load solution\n");
+    // Parameter validation
+    if (!b || !solution_file) {
+        fprintf(stderr, "Invalid parameters to board_load_solution\n");
         return false;
     }
     
-    printf("Loaded solution %u: %s (%ux%u)\n", solution_index, solution.uuid, solution.rows, solution.cols);
+    SolutionData solution = {0};
+    bool success = false;
     
-    // Ensure board size matches solution
+    // Load solution data
+    if (!config_load_solution(&solution, solution_file, solution_index)) {
+        fprintf(stderr, "Failed to load solution from %s (index %u)\n", solution_file, solution_index);
+        goto cleanup;
+    }
+    
+    // Validate solution size matches board
     if (solution.rows != b->rows || solution.cols != b->columns) {
         fprintf(stderr, "Solution size (%ux%u) doesn't match board size (%ux%u)\n",
                 solution.rows, solution.cols, b->rows, b->columns);
-        config_free_solution(&solution);
+        goto cleanup;
+    }
+    
+    // Load solution data into board
+    if (!board_apply_solution_data(b, &solution)) {
+        fprintf(stderr, "Failed to apply solution data to board\n");
+        goto cleanup;
+    }
+    
+    success = true;
+    
+cleanup:
+    config_free_solution(&solution);
+    return success;
+}
+
+static bool board_apply_solution_data(struct Board *b, const SolutionData *solution) {
+    if (!b || !solution || !solution->board) {
         return false;
     }
     
-    // Load entity IDs from solution
-    printf("Loading solution and resetting dead entities...\n");
+    bool first_starting_entity_found = false;
+    
+    // Apply solution data to board
     for (unsigned r = 0; r < b->rows; r++) {
         for (unsigned c = 0; c < b->columns; c++) {
-            unsigned entity_id = solution.board[r][c];
+            unsigned entity_id = solution->board[r][c];
+            
+            // Set entity ID
             board_set_entity_id(b, r, c, entity_id);
             
-            // All tiles start hidden
-            board_set_tile_state(b, r, c, TILE_HIDDEN);
+            // Set tile state - all hidden except first starting entity
+            if (entity_id == STARTING_ENTITY_ID && !first_starting_entity_found) {
+                board_set_tile_state(b, r, c, TILE_REVEALED);
+                first_starting_entity_found = true;
+            } else {
+                board_set_tile_state(b, r, c, TILE_HIDDEN);
+            }
             
             // Reset dead entity status for new game
             size_t index = (size_t)(r * b->columns + c);
             b->dead_entities[index] = false;
         }
     }
-    printf("Solution loaded - all dead entities reset to false\n");
     
     // Calculate threat levels for the loaded solution
     board_calculate_threat_levels(b);
     
-    config_free_solution(&solution);
     return true;
 }
 

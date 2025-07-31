@@ -207,10 +207,6 @@ bool game_load_map(struct Game *g) {
     // Load the new solution
     if (!board_load_solution(g->board, "assets/solutions_1_n_20.json", new_solution_index)) {
         fprintf(stderr, "Failed to load random solution %u\n", new_solution_index);
-        // Fallback to regular reset if loading fails
-        if (!board_reset(g->board)) {
-            return false;
-        }
     } else {
         g->admin.current_solution_index = new_solution_index;
         printf("Loaded random solution %u\n", new_solution_index);
@@ -394,20 +390,6 @@ bool game_events(struct Game *g) {
                 break;
             case SDL_SCANCODE_R:
                 game_admin_reveal_all(g);
-                break;
-            case SDL_SCANCODE_F4:
-                if (!game_admin_load_map(g, g->admin.current_solution_index + 1)) {
-                    printf("Failed to load next map\n");
-                }
-                break;
-            case SDL_SCANCODE_F5:
-                if (g->admin.current_solution_index > 0) {
-                    if (!game_admin_load_map(g, g->admin.current_solution_index - 1)) {
-                        printf("Failed to load previous map\n");
-                    }
-                } else {
-                    printf("Already at first map (0)\n");
-                }
                 break;
             case SDL_SCANCODE_F12:
                 game_print_admin_help();
@@ -694,29 +676,6 @@ void game_admin_reveal_all(struct Game *g) {
     printf("🔍 REVEALING ALL TILES...\n");
     board_reveal_all_tiles(g->board);
     printf("All tiles revealed!\n");
-}
-
-bool game_admin_load_map(struct Game *g, unsigned solution_index) {
-    printf("📍 Loading map %u...\n", solution_index);
-    
-    if (board_load_solution(g->board, "assets/solutions_1_n_20.json", solution_index)) {
-        g->admin.current_solution_index = solution_index;
-        
-        // Update window title to reflect new solution index
-        game_set_title(g);
-        
-        // Reset game state for new map
-        clock_reset(g->clock);
-        face_default(g->face);
-        g->game_over_info.is_game_over = false;  // Reset game over state
-        g->game_over_info.death_cause[0] = '\0'; // Clear death cause
-        
-        printf("✅ Successfully loaded map %u\n", solution_index);
-        return true;
-    } else {
-        printf("❌ Failed to load map %u\n", solution_index);
-        return false;
-    }
 }
 
 void game_print_admin_help(void) {
