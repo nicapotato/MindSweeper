@@ -66,9 +66,10 @@ int calculate_optimal_scale(int window_width, int window_height, int board_rows,
 #define ANIM_TREASURE_DURATION_MS 300
 
 // Player progression constants
-#define BASE_HEALTH 8
+#define BASE_HEALTH 10
 #define HEALTH_PER_LEVEL 2
 #define EXP_PER_LEVEL_MULTIPLIER 5
+#define STARTING_EXPERIENCE 4
 #define GOD_MODE_LEVEL 1000
 #define GOD_MODE_HEALTH 9999
 
@@ -85,5 +86,40 @@ int calculate_optimal_scale(int window_width, int window_height, int board_rows,
 #define MAX_TITLE_LENGTH 256
 #define MAX_ENTITY_TAGS 10
 #define MAX_TAG_LENGTH 32
+
+// Tile annotation constants for hidden tile annotations
+#define ANNOTATION_NONE 0
+#define ANNOTATION_LEVEL_1 1
+#define ANNOTATION_LEVEL_2 2
+#define ANNOTATION_LEVEL_3 3
+#define ANNOTATION_LEVEL_4 4
+#define ANNOTATION_LEVEL_5 5
+#define ANNOTATION_LEVEL_6 6
+#define ANNOTATION_LEVEL_11 11
+#define ANNOTATION_LEVEL_14 14
+#define ANNOTATION_LEVEL_16 16
+#define ANNOTATION_MINE 255  // Special value for asterisk (mine)
+
+// Annotation popover constants
+#define ANNOTATION_OPTION_SIZE 50     // Square size for each option
+#define ANNOTATION_OPTIONS_COUNT 11  // 1,2,3,4,5,6,11,14,16,*,Clear
+#define ANNOTATION_GRID_COLUMNS 4    // 4 columns in grid
+
+// Dynamic calculations based on options count
+#define ANNOTATION_GRID_ROWS ((ANNOTATION_OPTIONS_COUNT + ANNOTATION_GRID_COLUMNS - 1) / ANNOTATION_GRID_COLUMNS)
+#define ANNOTATION_POPOVER_WIDTH (ANNOTATION_GRID_COLUMNS * ANNOTATION_OPTION_SIZE)
+#define ANNOTATION_POPOVER_HEIGHT (ANNOTATION_GRID_ROWS * ANNOTATION_OPTION_SIZE)
+
+// Annotation option labels (for display)
+static const char* ANNOTATION_LABELS[ANNOTATION_OPTIONS_COUNT] = {
+    "1", "2", "3", "4", "5", "6", "11", "14", "16", "*", "Clear"
+};
+
+// Corresponding annotation values
+static const unsigned ANNOTATION_VALUES[ANNOTATION_OPTIONS_COUNT] = {
+    ANNOTATION_LEVEL_1, ANNOTATION_LEVEL_2, ANNOTATION_LEVEL_3, ANNOTATION_LEVEL_4, 
+    ANNOTATION_LEVEL_5, ANNOTATION_LEVEL_6, ANNOTATION_LEVEL_11, ANNOTATION_LEVEL_14, 
+    ANNOTATION_LEVEL_16, ANNOTATION_MINE, ANNOTATION_NONE
+};
 
 #endif

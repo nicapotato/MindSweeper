@@ -33,6 +33,15 @@ typedef struct {
     bool blocks_input;       // Can user click during this animation?
 } TileAnimation;
 
+// Annotation popover state
+typedef struct {
+    bool is_active;              // Whether popover is currently shown
+    unsigned target_row;         // Row of tile being annotated
+    unsigned target_col;         // Column of tile being annotated
+    int x, y;                    // Screen position of popover
+    int selected_option;         // Currently highlighted option (-1 for none)
+} AnnotationPopover;
+
 // Tile states
 typedef enum {
     TILE_HIDDEN = 0,
@@ -64,6 +73,9 @@ struct Board {
         
         // Threat level system (minesweeper logic)
         unsigned *threat_levels;         // 1D array: calculated threat levels for empty tiles
+        
+        // Player annotation system (for hidden tiles)
+        unsigned *annotations;           // 1D array: player annotations for tiles (0=none, 1-16=levels, 255=mine)
         
         // TTF font rendering for threat levels
         TTF_Font *threat_font;           // TTF font for threat level display
@@ -146,5 +158,11 @@ void board_draw_threat_level_text_centered(const struct Board *b, const char *te
 // Dead entity management (for instant combat resolution)
 void board_mark_entity_dead(struct Board *b, unsigned row, unsigned col);
 bool board_is_entity_dead(const struct Board *b, unsigned row, unsigned col);
+
+// Annotation system
+void board_set_annotation(struct Board *b, unsigned row, unsigned col, unsigned annotation);
+unsigned board_get_annotation(const struct Board *b, unsigned row, unsigned col);
+void board_clear_annotation(struct Board *b, unsigned row, unsigned col);
+void board_draw_annotation(const struct Board *b, unsigned row, unsigned col, SDL_Rect tile_rect);
 
 #endif

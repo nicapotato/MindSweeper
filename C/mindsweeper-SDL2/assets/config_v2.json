@@ -10,7 +10,7 @@
     "game_state": {
         "starting_max_health": 200,
         "starting_max_experience": 5,
-        "starting_level": 2,
+        "starting_level": 1,
         "default_music_enabled": false,
         "default_sound_enabled": true,
         "treasure_heal_amount": 8,

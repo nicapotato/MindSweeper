@@ -83,6 +83,7 @@ struct Game {
         bool is_fullscreen;           // Fullscreen mode state
         GameOverInfo game_over_info;  // Replaced simple boolean with detailed info
         VictoryInfo victory_info;     // Victory state information
+        AnnotationPopover annotation_popover;  // Annotation popover state
         unsigned rows;
         unsigned columns;
         int scale;
@@ -144,5 +145,8 @@ void game_check_victory(struct Game *g);
 void game_set_victory(struct Game *g, const char *victory_message);
 void game_draw_victory_popup(const struct Game *g);
 void game_reset_victory(struct Game *g);
+
+// Annotation system
+void game_draw_annotation_popover(const struct Game *g);
 
 #endif

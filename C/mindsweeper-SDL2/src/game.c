@@ -59,6 +59,15 @@ bool game_new(struct Game **game) {
     // Initialize victory info
     g->victory_info.is_victory = false;
     g->victory_info.victory_message[0] = '\0'; // Clear victory message
+    
+    // Initialize annotation popover
+    g->annotation_popover.is_active = false;
+    g->annotation_popover.target_row = 0;
+    g->annotation_popover.target_col = 0;
+    g->annotation_popover.x = 0;
+    g->annotation_popover.y = 0;
+    g->annotation_popover.selected_option = -1;
+    
     g->rows = DEFAULT_BOARD_ROWS;      // Use constant instead of magic number
     g->columns = DEFAULT_BOARD_COLS;   // Use constant instead of magic number
     
@@ -225,6 +234,9 @@ bool game_load_map(struct Game *g) {
     face_default(g->face);
     g->game_over_info.is_game_over = false;  // Reset game over state
     g->game_over_info.death_cause[0] = '\0'; // Clear death cause
+    
+    // Clear annotation popover if active
+    g->annotation_popover.is_active = false;
 
     return true;
 }
@@ -294,8 +306,6 @@ void game_mouse_down(struct Game *g, int x, int y, Uint8 button) {
 }
 
 bool game_mouse_up(struct Game *g, int x, int y, Uint8 button) {
-    (void)button;
-    
     // Only handle game interactions on the main game screen
     if (g->current_screen != SCREEN_GAME) {
         return true;
@@ -303,6 +313,37 @@ bool game_mouse_up(struct Game *g, int x, int y, Uint8 button) {
     
     // Ignore board interactions during game over
     if (g->game_over_info.is_game_over) {
+        return true;
+    }
+    
+    // Check if annotation popover is active
+    if (g->annotation_popover.is_active) {
+        // Handle popover interaction (left or right click closes it)
+        if (button == 1 || button == 3) { // SDL_BUTTON_LEFT or SDL_BUTTON_RIGHT
+            // Check if click is inside popover for option selection
+            if (button == 1 && x >= g->annotation_popover.x && 
+                x < g->annotation_popover.x + ANNOTATION_POPOVER_WIDTH &&
+                y >= g->annotation_popover.y && 
+                y < g->annotation_popover.y + ANNOTATION_POPOVER_HEIGHT) {
+                
+                // Calculate which option was clicked in grid
+                int clicked_row = (y - g->annotation_popover.y) / ANNOTATION_OPTION_SIZE;
+                int clicked_col = (x - g->annotation_popover.x) / ANNOTATION_OPTION_SIZE;
+                int option_index = clicked_row * ANNOTATION_GRID_COLUMNS + clicked_col;
+                
+                if (clicked_row >= 0 && clicked_row < ANNOTATION_GRID_ROWS &&
+                    clicked_col >= 0 && clicked_col < ANNOTATION_GRID_COLUMNS &&
+                    option_index >= 0 && option_index < ANNOTATION_OPTIONS_COUNT) {
+                    // Apply the selected annotation
+                    unsigned annotation_value = ANNOTATION_VALUES[option_index];
+                    board_set_annotation(g->board, g->annotation_popover.target_row, 
+                                       g->annotation_popover.target_col, annotation_value);
+                }
+            }
+            
+            // Close popover
+            g->annotation_popover.is_active = false;
+        }
         return true;
     }
     
@@ -322,8 +363,22 @@ bool game_mouse_up(struct Game *g, int x, int y, Uint8 button) {
         unsigned row = (unsigned)(board_y / g->board->piece_size);
         
         if (row < g->board->rows && col < g->board->columns) {
-            if (!board_handle_click(g, row, col)) {
-                return false;
+            
+            if (button == 3) { // SDL_BUTTON_RIGHT - show annotation popover
+                // Only show popover for hidden tiles
+                if (board_get_tile_state(g->board, row, col) == TILE_HIDDEN) {
+                    g->annotation_popover.is_active = true;
+                    g->annotation_popover.target_row = row;
+                    g->annotation_popover.target_col = col;
+                    g->annotation_popover.x = x;
+                    g->annotation_popover.y = y;
+                    g->annotation_popover.selected_option = -1;
+                }
+                return true;
+            } else if (button == 1) { // SDL_BUTTON_LEFT - normal click
+                if (!board_handle_click(g, row, col)) {
+                    return false;
+                }
             }
         }
     }
@@ -478,6 +533,9 @@ void game_draw(const struct Game *g) {
             
             // Draw victory popup if needed
             game_draw_victory_popup(g);
+            
+            // Draw annotation popover if active
+            game_draw_annotation_popover(g);
             break;
             
         case SCREEN_ENTITIES:
@@ -631,14 +689,12 @@ unsigned game_calculate_max_health(unsigned level) {
     if (level >= GOD_MODE_LEVEL) {
         return GOD_MODE_HEALTH; // GOD mode health
     }
-    return BASE_HEALTH + (level * HEALTH_PER_LEVEL); // Base health + 2 per level
+    return BASE_HEALTH + ((level+1)/2);
 }
 
 unsigned game_calculate_exp_requirement(unsigned level) {
-    return level * EXP_PER_LEVEL_MULTIPLIER; // Simple exp curve: 5, 10, 15, 20, etc.
+    return  STARTING_EXPERIENCE + level;
 }
-
-// ========== ADMIN PANEL FUNCTIONS ==========
 
 void game_toggle_admin_panel(struct Game *g) {
     g->admin.admin_panel_visible = !g->admin.admin_panel_visible;
@@ -659,8 +715,8 @@ void game_admin_god_mode(struct Game *g) {
     g->admin.god_mode_enabled = !g->admin.god_mode_enabled;
     
     if (g->admin.god_mode_enabled) {
-        g->game_over_info.is_game_over = false;  // Reset game over state when entering god mode
-        g->game_over_info.death_cause[0] = '\0'; // Clear death cause
+        g->game_over_info.is_game_over = false;
+        g->game_over_info.death_cause[0] = '\0';
         g->player.level = GOD_MODE_LEVEL;
         g->player.max_health = game_calculate_max_health(g->player.level);
         g->player.health = g->player.max_health;
@@ -669,7 +725,7 @@ void game_admin_god_mode(struct Game *g) {
         
         printf("🔱 GOD MODE ACTIVATED! Player level set to %u with %u health!\n", 
                GOD_MODE_LEVEL, GOD_MODE_HEALTH);
-        face_won(g->face); // Show winning face for GOD mode
+        face_won(g->face);
     } else {
         g->player.level = 1;
         g->player.max_health = game_calculate_max_health(g->player.level);
@@ -1679,4 +1735,84 @@ void game_draw_howto_screen(const struct Game *g) {
         }
         current_y += line_height;
     }
+}
+
+// ========== ANNOTATION POPOVER SYSTEM ==========
+
+void game_draw_annotation_popover(const struct Game *g) {
+    if (!g->annotation_popover.is_active) {
+        return; // No popover to draw
+    }
+    
+    // Draw popover background (dark gray with black border)
+    SDL_Rect popover_rect = {
+        g->annotation_popover.x,
+        g->annotation_popover.y,
+        ANNOTATION_POPOVER_WIDTH,
+        ANNOTATION_POPOVER_HEIGHT
+    };
+    
+    // Ensure popover stays within screen bounds
+    if (popover_rect.x + popover_rect.w > WINDOW_WIDTH) {
+        popover_rect.x = WINDOW_WIDTH - popover_rect.w;
+    }
+    if (popover_rect.y + popover_rect.h > WINDOW_HEIGHT) {
+        popover_rect.y = WINDOW_HEIGHT - popover_rect.h;
+    }
+    
+    // Draw background
+    SDL_SetRenderDrawColor(g->renderer, 80, 80, 80, 255); // Dark gray
+    SDL_RenderFillRect(g->renderer, &popover_rect);
+    
+    // Draw border
+    SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255); // Black
+    SDL_RenderDrawRect(g->renderer, &popover_rect);
+    
+    // Draw options in 4-column grid
+    for (int i = 0; i < ANNOTATION_OPTIONS_COUNT; i++) {
+        int row = i / ANNOTATION_GRID_COLUMNS;
+        int col = i % ANNOTATION_GRID_COLUMNS;
+        
+        SDL_Rect option_rect = {
+            popover_rect.x + col * ANNOTATION_OPTION_SIZE,
+            popover_rect.y + row * ANNOTATION_OPTION_SIZE,
+            ANNOTATION_OPTION_SIZE,
+            ANNOTATION_OPTION_SIZE
+        };
+        
+        // Highlight selected option
+        if (i == g->annotation_popover.selected_option) {
+            SDL_SetRenderDrawColor(g->renderer, 120, 120, 120, 255); // Light gray
+            SDL_RenderFillRect(g->renderer, &option_rect);
+        }
+        
+        // Draw option border
+        SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255); // Black
+        SDL_RenderDrawRect(g->renderer, &option_rect);
+        
+        // Draw option text
+        if (g->info_font) {
+            SDL_Color text_color = {255, 255, 255, 255}; // White text
+            
+            SDL_Surface *text_surface = TTF_RenderText_Solid(g->info_font, ANNOTATION_LABELS[i], text_color);
+            if (text_surface) {
+                SDL_Texture *text_texture = SDL_CreateTextureFromSurface(g->renderer, text_surface);
+                if (text_texture) {
+                    SDL_Rect text_rect = {
+                        option_rect.x + (option_rect.w - text_surface->w) / 2, // Center horizontally
+                        option_rect.y + (option_rect.h - text_surface->h) / 2, // Center vertically
+                        text_surface->w,
+                        text_surface->h
+                    };
+                    
+                    SDL_RenderCopy(g->renderer, text_texture, NULL, &text_rect);
+                    SDL_DestroyTexture(text_texture);
+                }
+                SDL_FreeSurface(text_surface);
+            }
+        }
+    }
+    
+    // Reset render color
+    SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255);
 }

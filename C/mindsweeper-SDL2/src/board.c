@@ -133,9 +133,11 @@ bool board_calloc_arrays(struct Board *b) {
     b->tile_variations = calloc(total_tiles, sizeof(unsigned));
     b->tile_rotations = calloc(total_tiles, sizeof(unsigned));
     b->threat_levels = calloc(total_tiles, sizeof(unsigned));
+    b->annotations = calloc(total_tiles, sizeof(unsigned));
 
     if (!b->entity_ids || !b->tile_states || !b->dead_entities || !b->animations || 
-        !b->display_sprites || !b->tile_variations || !b->tile_rotations || !b->threat_levels) {
+        !b->display_sprites || !b->tile_variations || !b->tile_rotations || 
+        !b->threat_levels || !b->annotations) {
         board_free_arrays(b);
         return false;
     }
@@ -176,6 +178,10 @@ void board_free_arrays(struct Board *b) {
         free(b->threat_levels);
         b->threat_levels = NULL;
     }
+    if (b->annotations) {
+        free(b->annotations);
+        b->annotations = NULL;
+    }
 }
 
 bool board_reset(struct Board *b) {
@@ -197,6 +203,9 @@ bool board_reset(struct Board *b) {
         // Generate random variations for TILE_HIDDEN tiles
         b->tile_variations[i] = (unsigned)(MIN_TILE_VARIATION + (rand() % (MAX_TILE_VARIATION - MIN_TILE_VARIATION + 1)));
         b->tile_rotations[i] = (unsigned)(rand() % NUM_TILE_ROTATIONS);          // Random rotation 0-3 (0°, 90°, 180°, 270°)
+        
+        // Initialize annotations as none
+        b->annotations[i] = ANNOTATION_NONE;
     }
 
     // Calculate initial threat levels
@@ -267,9 +276,10 @@ static bool board_apply_solution_data(struct Board *b, const SolutionData *solut
                 board_set_tile_state(b, r, c, TILE_HIDDEN);
             }
             
-            // Reset dead entity status for new game
+            // Reset dead entity status and annotations for new game
             size_t index = (size_t)(r * b->columns + c);
             b->dead_entities[index] = false;
+            b->annotations[index] = ANNOTATION_NONE;
         }
     }
     
@@ -527,6 +537,9 @@ void board_draw(const struct Board *b) {
                                    &b->tile_src_rects[tile_variation], &dest_rect,
                                    angle, &center, SDL_FLIP_NONE);
                 }
+                
+                // Draw annotation on top of hidden tile (highest z-axis)
+                board_draw_annotation(b, r, c, dest_rect);
             } else {
                 // TILE_REVEALED: render entity sprite or threat level on top of tile
                 unsigned sprite_index = b->display_sprites[index];
@@ -781,4 +794,110 @@ void board_reveal_all_tiles(struct Board *b) {
 
 const GameConfig* board_get_config(void) {
     return &g_config;
+}
+
+// ========== ANNOTATION SYSTEM ==========
+
+void board_set_annotation(struct Board *b, unsigned row, unsigned col, unsigned annotation) {
+    if (!b || !b->annotations || row >= b->rows || col >= b->columns) {
+        return;
+    }
+    
+    size_t index = (size_t)(row * b->columns + col);
+    b->annotations[index] = annotation;
+    
+    printf("Annotation set at [%u,%u]: %u\n", row, col, annotation);
+}
+
+unsigned board_get_annotation(const struct Board *b, unsigned row, unsigned col) {
+    if (!b || !b->annotations || row >= b->rows || col >= b->columns) {
+        return ANNOTATION_NONE;
+    }
+    
+    size_t index = (size_t)(row * b->columns + col);
+    return b->annotations[index];
+}
+
+void board_clear_annotation(struct Board *b, unsigned row, unsigned col) {
+    board_set_annotation(b, row, col, ANNOTATION_NONE);
+}
+
+void board_draw_annotation(const struct Board *b, unsigned row, unsigned col, SDL_Rect tile_rect) {
+    if (!b || !b->annotations || !b->threat_font) {
+        return;
+    }
+    
+    unsigned annotation = board_get_annotation(b, row, col);
+    if (annotation == ANNOTATION_NONE) {
+        return; // No annotation to draw
+    }
+    
+    // Prepare annotation text
+    char annotation_text[8];
+    if (annotation == ANNOTATION_MINE) {
+        snprintf(annotation_text, sizeof(annotation_text), "*");
+    } else {
+        snprintf(annotation_text, sizeof(annotation_text), "%u", annotation);
+    }
+    
+    // Colors for annotation text (distinct from threat level colors)
+    SDL_Color black = {0, 0, 0, 255};      // Outline color
+    SDL_Color yellow = {255, 255, 0, 255}; // Main annotation color (bright yellow)
+    
+    // Create text surfaces
+    SDL_Surface *outline_surface = TTF_RenderText_Solid(b->threat_font, annotation_text, black);
+    SDL_Surface *main_surface = TTF_RenderText_Solid(b->threat_font, annotation_text, yellow);
+    
+    if (!outline_surface || !main_surface) {
+        if (outline_surface) SDL_FreeSurface(outline_surface);
+        if (main_surface) SDL_FreeSurface(main_surface);
+        return;
+    }
+    
+    // Create textures
+    SDL_Texture *outline_texture = SDL_CreateTextureFromSurface(b->renderer, outline_surface);
+    SDL_Texture *main_texture = SDL_CreateTextureFromSurface(b->renderer, main_surface);
+    
+    if (!outline_texture || !main_texture) {
+        if (outline_texture) SDL_DestroyTexture(outline_texture);
+        if (main_texture) SDL_DestroyTexture(main_texture);
+        SDL_FreeSurface(outline_surface);
+        SDL_FreeSurface(main_surface);
+        return;
+    }
+    
+    // Calculate position (centered in tile)
+    int text_x = tile_rect.x + (tile_rect.w - main_surface->w) / 2;
+    int text_y = tile_rect.y + (tile_rect.h - main_surface->h) / 2;
+    
+    // Outline offset positions (simple 4-directional outline)
+    int outline_offsets[][2] = {
+        {-1, 0}, {1, 0}, {0, -1}, {0, 1}
+    };
+    
+    // Draw black outline
+    for (int i = 0; i < 4; i++) {
+        SDL_Rect outline_rect = {
+            text_x + outline_offsets[i][0],
+            text_y + outline_offsets[i][1],
+            outline_surface->w,
+            outline_surface->h
+        };
+        SDL_RenderCopy(b->renderer, outline_texture, NULL, &outline_rect);
+    }
+    
+    // Draw main yellow text on top
+    SDL_Rect main_rect = {
+        text_x,
+        text_y,
+        main_surface->w,
+        main_surface->h
+    };
+    SDL_RenderCopy(b->renderer, main_texture, NULL, &main_rect);
+    
+    // Cleanup
+    SDL_DestroyTexture(outline_texture);
+    SDL_DestroyTexture(main_texture);
+    SDL_FreeSurface(outline_surface);
+    SDL_FreeSurface(main_surface);
 }
