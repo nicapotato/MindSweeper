@@ -1317,6 +1317,11 @@ void game_toggle_fullscreen(struct Game *g) {
         }
         printf("Entered fullscreen mode\n");
         
+        // Add a small delay to let the browser stabilize
+        #ifdef WASM_BUILD
+        SDL_Delay(100); // Let browser finish fullscreen transition
+        #endif
+        
         // Get the actual fullscreen dimensions
         int display_w, display_h;
         SDL_GetWindowSize(g->window, &display_w, &display_h);
@@ -1334,8 +1339,22 @@ void game_toggle_fullscreen(struct Game *g) {
         }
         printf("Exited fullscreen mode\n");
         
-        // Restore window size
-        SDL_SetWindowSize(g->window, WINDOW_WIDTH, WINDOW_HEIGHT);
+        // Add delay for WASM builds to let DOM stabilize
+        #ifdef WASM_BUILD
+        SDL_Delay(100);
+        #endif
+        
+        // Get actual window size instead of assuming WINDOW_WIDTH/HEIGHT
+        int actual_w, actual_h;
+        SDL_GetWindowSize(g->window, &actual_w, &actual_h);
+        
+        // Only resize if it's not already the right size
+        if (actual_w != WINDOW_WIDTH || actual_h != WINDOW_HEIGHT) {
+            SDL_SetWindowSize(g->window, WINDOW_WIDTH, WINDOW_HEIGHT);
+            #ifdef WASM_BUILD
+            SDL_Delay(50); // Let resize complete
+            #endif
+        }
         
         // Recalculate optimal scale for windowed mode
         g->scale = calculate_optimal_scale(WINDOW_WIDTH, WINDOW_HEIGHT, (int)g->rows, (int)g->columns);
@@ -1744,6 +1763,10 @@ void game_draw_annotation_popover(const struct Game *g) {
         return; // No popover to draw
     }
     
+    // Get current screen dimensions instead of hardcoded values
+    int current_width, current_height;
+    SDL_GetWindowSize(g->window, &current_width, &current_height);
+    
     // Draw popover background (dark gray with black border)
     SDL_Rect popover_rect = {
         g->annotation_popover.x,
@@ -1752,12 +1775,12 @@ void game_draw_annotation_popover(const struct Game *g) {
         ANNOTATION_POPOVER_HEIGHT
     };
     
-    // Ensure popover stays within screen bounds
-    if (popover_rect.x + popover_rect.w > WINDOW_WIDTH) {
-        popover_rect.x = WINDOW_WIDTH - popover_rect.w;
+    // Ensure popover stays within current screen bounds
+    if (popover_rect.x + popover_rect.w > current_width) {
+        popover_rect.x = current_width - popover_rect.w;
     }
-    if (popover_rect.y + popover_rect.h > WINDOW_HEIGHT) {
-        popover_rect.y = WINDOW_HEIGHT - popover_rect.h;
+    if (popover_rect.y + popover_rect.h > current_height) {
+        popover_rect.y = current_height - popover_rect.h;
     }
     
     // Draw background
