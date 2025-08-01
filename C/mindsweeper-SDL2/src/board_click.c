@@ -232,9 +232,24 @@ bool board_handle_click(struct Game *g, unsigned row, unsigned col) {
         printf("none");
     }
     printf("\n");
-    if (entity && entity->level > 0) {
+    
+    // Check for special click behavior based on tags
+    bool has_hidden_click_reveal = entity_has_tag(entity, "hidden-click-reveal");
+    
+    if (current_state == TILE_HIDDEN && has_hidden_click_reveal) {
+        board_set_tile_state(g->board, row, col, TILE_REVEALED);
+        board_start_animation(g->board, row, col, ANIM_REVEALING, ANIM_REVEALING_DURATION_MS, false, current_state);
+        return true;
+    } else if (entity && entity->level > 0) {
         game_update_player_health(g, -(int)entity->level);  // Use safer health update function
-        g->player.experience += entity->level;
+        
+        // Only add experience if entity doesn't have "no-experience" tag
+        if (!entity_has_tag(entity, "no-experience")) {
+            g->player.experience += entity->level;
+        } else {
+            printf("  Entity has 'no-experience' tag - no experience gained\n");
+        }
+        
         board_mark_entity_dead(g->board, row, col);
         // Check if player died from this combat - do this AFTER health update but BEFORE animations
         if (g->player.health <= 0 && !g->game_over_info.is_game_over) {

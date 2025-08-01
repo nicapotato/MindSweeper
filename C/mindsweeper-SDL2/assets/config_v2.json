@@ -649,7 +649,7 @@
             "symbol": "V",
             "level": 2,
             "count": 10,
-            "tags": ["onReveal-neutral", "no-experience", "revealed-click-fight", "paired"],
+            "tags": ["onReveal-neutral", "no-experience", "hidden-click-reveal", "paired"],
             "entity_transition": {
                 "on_cleared": {
                     "entity_id": 0,
@@ -745,7 +745,7 @@
             "symbol": "A",
             "level": 11,
             "count": 1,
-            "tags": ["enemy", "hidden-click-reveal", "revealed-click-fight"],
+            "tags": ["enemy", "hidden-click-reveal"],
             "content_transitions": ["ALIVE_TO_DYING", "DYING_TO_DEAD"],
             "entity_transition": {
                 "on_cleared": {

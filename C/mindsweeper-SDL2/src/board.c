@@ -718,7 +718,15 @@ void board_calculate_threat_levels(struct Board *b) {
                                     // Entity is dead, treat as level 0 (no threat)
                                     // threat_level += 0; (no need to add anything)
                                 } else {
-                                    threat_level += entity->level;
+                                    // Check if entity should contribute to threat calculation
+                                    // Exclude neutral obstacles like Stone Barriers
+                                    bool is_neutral = entity_has_tag(entity, "no-experience") || 
+                                                    entity_has_tag(entity, "onReveal-neutral");
+                                    
+                                    if (!is_neutral) {
+                                        threat_level += entity->level;
+                                    }
+                                    // Neutral entities (like Stone Barriers) don't contribute to threat
                                 }
                             }
                         }
