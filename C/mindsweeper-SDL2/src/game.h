@@ -129,6 +129,7 @@ void game_print_admin_help(void);
 bool player_panel_new(PlayerPanel **panel, SDL_Renderer *renderer, unsigned columns, int scale);
 void player_panel_free(PlayerPanel **panel);
 void player_panel_set_scale(PlayerPanel *p, int scale);
+void player_panel_center_horizontally(PlayerPanel *p, int window_width);
 void player_panel_set_size(PlayerPanel *p, unsigned columns);
 void player_panel_draw(const PlayerPanel *p, const PlayerStats *stats, const struct Game *g);
 bool player_panel_handle_click(PlayerPanel *p, int x, int y, struct Game *g);

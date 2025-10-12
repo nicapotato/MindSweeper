@@ -124,6 +124,7 @@ void board_free(struct Board **board);
  */
 bool board_reset(struct Board *b);
 void board_set_scale(struct Board *b, int scale);
+void board_center_horizontally(struct Board *b, int window_width);
 void board_set_theme(struct Board *b, unsigned theme);
 void board_set_size(struct Board *b, unsigned rows, unsigned columns);
 void board_draw(const struct Board *b);

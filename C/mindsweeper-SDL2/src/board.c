@@ -292,10 +292,21 @@ static bool board_apply_solution_data(struct Board *b, const SolutionData *solut
 void board_set_scale(struct Board *b, int scale) {
     b->scale = scale;
     b->piece_size = PIECE_SIZE * b->scale;
-    b->rect.x = (PIECE_SIZE - BORDER_LEFT) * b->scale;
+    b->rect.x = 0; // Will be set by centering function
     b->rect.y = GAME_BOARD_Y * b->scale;
     b->rect.w = (int)b->columns * b->piece_size;
     b->rect.h = (int)b->rows * b->piece_size;
+}
+
+void board_center_horizontally(struct Board *b, int window_width) {
+    // Center the board horizontally with equal margins on both sides
+    // Add a minimum margin from window edges for visual breathing room
+    int margin = 20; // Equal margin on both sides for symmetry
+    int available_width = window_width - (2 * margin);
+    int total_board_width = b->rect.w;
+    
+    // Calculate center position within available width
+    b->rect.x = margin + (available_width - total_board_width) / 2;
 }
 
 void board_set_theme(struct Board *b, unsigned theme) { 

@@ -123,6 +123,10 @@ bool game_new(struct Game **game) {
     
     // Initialize screen system
     game_init_screen_system(g);
+    
+    // Ensure all components are properly centered with actual window dimensions
+    // This matches what happens when toggling fullscreen, ensuring consistent layout
+    game_set_scale(g);
 
     // Start background music
     audio_play_background_music(&g->audio);
@@ -242,11 +246,17 @@ bool game_load_map(struct Game *g) {
 }
 
 void game_set_scale(struct Game *g) {
+    // Get window size for centering
+    int window_width, window_height;
+    SDL_GetWindowSize(g->window, &window_width, &window_height);
+    
     border_set_scale(g->border, g->scale);
     board_set_scale(g->board, g->scale);
+    board_center_horizontally(g->board, window_width); // Center the board
     clock_set_scale(g->clock, g->scale);
     face_set_scale(g->face, g->scale);
     player_panel_set_scale(g->player_panel, g->scale);
+    player_panel_center_horizontally(g->player_panel, window_width); // Center the panel
     
     // Update screen button positions for new scale
     game_setup_screen_buttons(g);
@@ -254,7 +264,7 @@ void game_set_scale(struct Game *g) {
     // Update info font size
     if (g->info_font) {
         TTF_CloseFont(g->info_font);
-        g->info_font = TTF_OpenFont("assets/images/m6x11.ttf", 12); // Increased from 12 to 18 (50% bigger)
+        g->info_font = TTF_OpenFont("assets/images/m6x11.ttf", 24); // Match the size from init
     }
 }
 
@@ -520,7 +530,14 @@ void game_update(struct Game *g) {
 }
 
 void game_draw(const struct Game *g) {
-    SDL_RenderClear(g->renderer);
+    // Get actual window size
+    int window_width, window_height;
+    SDL_GetWindowSize(g->window, &window_width, &window_height);
+    
+    // Clear entire window with a black background
+    SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255); // Black background
+    SDL_Rect bg_rect = {0, 0, window_width, window_height};
+    SDL_RenderFillRect(g->renderer, &bg_rect);
 
     // Draw based on current screen state
     switch (g->current_screen) {
@@ -1057,7 +1074,7 @@ void player_panel_free(PlayerPanel **panel) {
 
 void player_panel_set_scale(PlayerPanel *p, int scale) {
     p->scale = scale;
-    p->rect.x = (PIECE_SIZE - BORDER_LEFT) * p->scale; // Align with game board
+    p->rect.x = 0; // Will be set by centering function
     
     // Position panel below the actual board height (using DEFAULT_BOARD_ROWS instead of hardcoded 10)
     p->rect.y = (GAME_BOARD_Y + (PIECE_SIZE * DEFAULT_BOARD_ROWS) + 5) * p->scale; // Below game board, reduced spacing
@@ -1069,10 +1086,23 @@ void player_panel_set_scale(PlayerPanel *p, int scale) {
     p->rect.h = (PLAYER_PANEL_HEIGHT / 2) * p->scale; // Make it more compact - half the original height
     
     // Set up level-up button position (left side) - smaller button for compact layout
-    p->level_up_button.x = p->rect.x + 4 * p->scale;
+    // Position will be adjusted in centering function
+    p->level_up_button.x = 4 * p->scale;
     p->level_up_button.y = p->rect.y + 4 * p->scale;
     p->level_up_button.w = (int)((PIECE_SIZE * 1.2) * p->scale); // Slightly smaller button
     p->level_up_button.h = (int)((PIECE_SIZE * 1.2) * p->scale); // Slightly smaller button
+}
+
+void player_panel_center_horizontally(PlayerPanel *p, int window_width) {
+    // Center the player panel with equal margins matching the board
+    int margin = 20; // Match board's margin for consistency
+    int available_width = window_width - (2 * margin);
+    
+    // Calculate center position within available width
+    p->rect.x = margin + (available_width - p->rect.w) / 2;
+    
+    // Position level-up button relative to panel's centered position
+    p->level_up_button.x = p->rect.x + 4 * p->scale;
 }
 
 void player_panel_set_size(PlayerPanel *p, unsigned columns) {
@@ -1370,8 +1400,8 @@ void game_toggle_fullscreen(struct Game *g) {
 void game_init_screen_system(struct Game *g) {
     g->current_screen = SCREEN_GAME;
     
-    // Load font for information screens - use larger fixed size for better readability
-    g->info_font = TTF_OpenFont("assets/images/m6x11.ttf", 18); // Increased from 12 to 18 (50% bigger)
+    // Load font for information screens - use larger size for better readability
+    g->info_font = TTF_OpenFont("assets/images/m6x11.ttf", 24); // Increased to 24 for better readability
     if (!g->info_font) {
         fprintf(stderr, "Failed to load info font: %s\n", TTF_GetError());
         // Continue without font - fallback will be handled in drawing
@@ -1386,8 +1416,9 @@ void game_set_screen(struct Game *g, UIScreenState screen) {
 }
 
 void game_setup_screen_buttons(struct Game *g) {
-    int window_width = WINDOW_WIDTH * g->scale;
-    int window_height = WINDOW_HEIGHT * g->scale;
+    // Get actual window dimensions for proper fullscreen support
+    int window_width, window_height;
+    SDL_GetWindowSize(g->window, &window_width, &window_height);
     
     int button_width = 80 * g->scale;
     int button_height = 25 * g->scale;
@@ -1535,9 +1566,11 @@ void game_draw_screen_buttons(const struct Game *g) {
 }
 
 void game_draw_entities_screen(const struct Game *g) {
-    // Draw dark background
+    // Draw dark background - use actual window size
     SDL_SetRenderDrawColor(g->renderer, 30, 30, 30, 255);
-    SDL_Rect screen = {0, 0, WINDOW_WIDTH * g->scale, WINDOW_HEIGHT * g->scale};
+    int window_width, window_height;
+    SDL_GetWindowSize(g->window, &window_width, &window_height);
+    SDL_Rect screen = {0, 0, window_width, window_height};
     SDL_RenderFillRect(g->renderer, &screen);
     
     if (!g->info_font) {
@@ -1557,7 +1590,8 @@ void game_draw_entities_screen(const struct Game *g) {
     
     int start_x = 20;
     int start_y = 50;
-    int line_height = 14; // Fixed line height, not scaled for compactness
+    int line_height = 32; // Increased from 24 to 32 for better spacing with larger sprites
+    int sprite_size = 28; // Increased from 20 to 28 for better visibility
     int current_y = start_y;
     
     // Title
@@ -1626,9 +1660,22 @@ void game_draw_entities_screen(const struct Game *g) {
                     }
                 }
                 
-                // Format entity info: "  L1 Fireflies                14/14"
+                // Draw entity sprite
+                if (g->board->entity_sprites && g->board->entity_src_rects) {
+                    unsigned sprite_index = get_entity_sprite_index(entity->id, TILE_REVEALED, 0, 0, SPRITE_TYPE_NORMAL);
+                    SDL_Rect sprite_dest = {
+                        start_x,
+                        current_y,
+                        sprite_size,
+                        sprite_size
+                    };
+                    SDL_RenderCopy(g->renderer, g->board->entity_sprites, 
+                                   &g->board->entity_src_rects[sprite_index], &sprite_dest);
+                }
+                
+                // Format entity info: "L1 Fireflies                14/14"
                 char entity_line[256];
-                snprintf(entity_line, sizeof(entity_line), "  L%u %s%*s%u/%u", 
+                snprintf(entity_line, sizeof(entity_line), "L%u %s%*s%u/%u", 
                         entity->level, 
                         entity->name,
                         (int)(25 - strlen(entity->name)), "", // Right-align counts
@@ -1638,7 +1685,12 @@ void game_draw_entities_screen(const struct Game *g) {
                 if (entity_surface) {
                     SDL_Texture *entity_texture = SDL_CreateTextureFromSurface(g->renderer, entity_surface);
                     if (entity_texture) {
-                        SDL_Rect entity_rect = {start_x, current_y, entity_surface->w, entity_surface->h};
+                        SDL_Rect entity_rect = {
+                            start_x + sprite_size + 8, // Offset by sprite width + padding
+                            current_y + (sprite_size - entity_surface->h) / 2, // Center vertically with sprite
+                            entity_surface->w, 
+                            entity_surface->h
+                        };
                         SDL_RenderCopy(g->renderer, entity_texture, NULL, &entity_rect);
                         SDL_DestroyTexture(entity_texture);
                     }
@@ -1647,7 +1699,7 @@ void game_draw_entities_screen(const struct Game *g) {
                 current_y += line_height;
                 
                 // Check if we're running out of space
-                if (current_y > WINDOW_HEIGHT - 100) {
+                if (current_y > window_height - 100) {
                     break;
                 }
             }
@@ -1658,9 +1710,11 @@ void game_draw_entities_screen(const struct Game *g) {
 }
 
 void game_draw_howto_screen(const struct Game *g) {
-    // Draw dark background
+    // Draw dark background - use actual window size
     SDL_SetRenderDrawColor(g->renderer, 30, 30, 30, 255);
-    SDL_Rect screen = {0, 0, WINDOW_WIDTH * g->scale, WINDOW_HEIGHT * g->scale};
+    int window_width, window_height;
+    SDL_GetWindowSize(g->window, &window_width, &window_height);
+    SDL_Rect screen = {0, 0, window_width, window_height};
     SDL_RenderFillRect(g->renderer, &screen);
     
     if (!g->info_font) {
@@ -1673,7 +1727,7 @@ void game_draw_howto_screen(const struct Game *g) {
     
     int start_x = 10;
     int start_y = 50;
-    int line_height = 14; // Fixed line height, not scaled for compactness
+    int line_height = 18; // Increased from 14 to 18 for better readability
     int current_y = start_y;
     
     // Title
@@ -1729,7 +1783,7 @@ void game_draw_howto_screen(const struct Game *g) {
     
     const int num_lines = sizeof(lines) / sizeof(lines[0]);
     
-    for (int i = 0; i < num_lines && current_y < WINDOW_HEIGHT - 50; i++) {
+    for (int i = 0; i < num_lines && current_y < window_height - 50; i++) {
         if (strlen(lines[i]) == 0) {
             current_y += line_height / 2; // Half-height for empty lines
             continue;
